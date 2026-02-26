@@ -9,7 +9,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-change-me-in-production')
 DEBUG = os.getenv('DEBUG', 'True') == 'True'
-ALLOWED_HOSTS = ['*']
+ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', '*').split(',')
 
 INSTALLED_APPS = [
     # Jazzmin admin
@@ -71,11 +71,22 @@ TEMPLATES = [
 WSGI_APPLICATION = 'config.wsgi.application'
 ASGI_APPLICATION = 'config.asgi.application'
 
-CHANNEL_LAYERS = {
-    'default': {
-        'BACKEND': 'channels.layers.InMemoryChannelLayer',
+# ✅ Production: Redis | Local: InMemory
+if DEBUG:
+    CHANNEL_LAYERS = {
+        'default': {
+            'BACKEND': 'channels.layers.InMemoryChannelLayer',
+        }
     }
-}
+else:
+    CHANNEL_LAYERS = {
+        'default': {
+            'BACKEND': 'channels_redis.core.RedisChannelLayer',
+            'CONFIG': {
+                'hosts': ['redis://redis:6379/0'],
+            },
+        }
+    }
 
 DATABASES = {
     'default': {
@@ -126,21 +137,27 @@ SIMPLE_JWT = {
 }
 
 # CORS
-CORS_ALLOW_ALL_ORIGINS = True
+CORS_ALLOW_ALL_ORIGINS = DEBUG
+CORS_ALLOWED_ORIGINS = [
+    'https://ittatuz.uz',
+    'https://www.ittatuz.uz',
+]
 CORS_ALLOW_CREDENTIALS = True
 
-# CSRF & Session — Telegram WebApp / ngrok uchun
+# CSRF
 CSRF_TRUSTED_ORIGINS = [
+    'https://ittatuz.uz',
+    'https://www.ittatuz.uz',
     'https://*.ngrok-free.app',
     'https://*.ngrok.io',
     'http://localhost:8000',
     'http://127.0.0.1:8000',
 ]
 CSRF_COOKIE_SAMESITE = 'Lax'
-CSRF_COOKIE_HTTPONLY = False   # JS cookie'ni o'qiy olsin
+CSRF_COOKIE_HTTPONLY = False
 SESSION_COOKIE_SAMESITE = 'Lax'
 SESSION_COOKIE_HTTPONLY = True
-X_FRAME_OPTIONS = 'ALLOWALL'  # Telegram WebApp iframe ichida ishlaydi
+X_FRAME_OPTIONS = 'ALLOWALL'
 
 # OpenAI
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY', '')
