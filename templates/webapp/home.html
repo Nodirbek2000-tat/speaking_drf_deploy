@@ -1,0 +1,237 @@
+{% extends 'webapp/base.html' %}
+{% block title %}Home — Speaking Bot{% endblock %}
+{% block extra_head %}<meta name="active-page" content="home">{% endblock %}
+
+{% block content %}
+<div class="safe-bottom overflow-y-auto">
+  <!-- Header -->
+  <div class="safe-top px-5 pb-2 flex items-center justify-between">
+    <div class="flex items-center gap-3">
+      <div class="w-10 h-10 rounded-full bg-gradient-to-br from-brand to-purple-600 flex items-center justify-center text-white font-bold text-lg">
+        {{ user.first_name|first|upper|default:"U" }}
+      </div>
+      <div>
+        <div class="font-semibold text-sm text-white">{{ user.first_name|default:user.username }}</div>
+        <div class="text-xs text-slate-400">@{{ user.username }}</div>
+      </div>
+    </div>
+    {% if user.has_premium_active %}
+    <div class="badge-premium">👑 Premium</div>
+    {% endif %}
+  </div>
+
+  <div class="px-4 space-y-4 pb-4">
+    <!-- Week Calendar -->
+    <div class="card p-4">
+      <div class="flex justify-between">
+        {% for day in week_days %}
+        <div class="flex flex-col items-center gap-2">
+          <span class="text-xs font-medium {% if day.is_today %}text-brand{% else %}text-slate-500{% endif %}">{{ day.label }}</span>
+          <div class="w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold
+            {% if day.is_today %}bg-brand text-white
+            {% elif day.has_activity %}bg-brand/20 text-brand
+            {% else %}text-slate-600{% endif %}">
+            {{ day.date.day }}
+          </div>
+          <div class="w-1.5 h-1.5 rounded-full {% if day.has_activity %}bg-success{% else %}bg-transparent{% endif %}"></div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+
+    <!-- Streak -->
+    <div class="card p-4 flex items-center gap-4">
+      <div class="w-12 h-12 rounded-2xl bg-orange-500/20 flex items-center justify-center text-2xl">🔥</div>
+      <div class="flex-1">
+        <div class="text-2xl font-bold text-white">{{ streak }} <span class="text-sm font-normal text-slate-400">day streak</span></div>
+        <div class="text-xs text-slate-500">Keep it going!</div>
+      </div>
+    </div>
+
+    <!-- Stats Row -->
+    <div class="grid grid-cols-3 gap-3">
+      <div class="card p-3 text-center">
+        <div class="text-2xl font-bold text-brand">{{ voice_rooms_count }}</div>
+        <div class="text-xs text-slate-400 mt-0.5">Conversations</div>
+      </div>
+      <div class="card p-3 text-center">
+        <div class="text-2xl font-bold text-success">{{ user.practice_count }}</div>
+        <div class="text-xs text-slate-400 mt-0.5">Practice</div>
+      </div>
+      <div class="card p-3 text-center">
+        <div class="text-2xl font-bold text-gold">{{ user.ielts_count }}</div>
+        <div class="text-xs text-slate-400 mt-0.5">IELTS Mocks</div>
+      </div>
+    </div>
+
+    <!-- My Progress -->
+    {% if progress_data %}
+    <div class="card p-4">
+      <div class="flex items-center gap-2 mb-4">
+        <span>📊</span>
+        <span class="font-semibold text-white">My Progress</span>
+      </div>
+
+      {% if progress_data.latest_ielts_band %}
+      <div class="flex items-center justify-between py-3 border-b border-white/5">
+        <div class="flex items-center gap-2 text-sm text-slate-300">📝 IELTS Score</div>
+        <div class="font-bold text-white">Band {{ progress_data.latest_ielts_band }}</div>
+      </div>
+      {% endif %}
+
+      {% if progress_data.latest_cefr_score %}
+      <div class="flex items-center justify-between py-3 border-b border-white/5">
+        <div class="flex items-center gap-2 text-sm text-slate-300">🎯 CEFR Level</div>
+        <div class="font-bold text-white">{{ progress_data.latest_cefr_level }} <span class="text-sm font-normal text-slate-400">({{ progress_data.latest_cefr_score }}pts)</span></div>
+      </div>
+      {% endif %}
+
+      <div class="flex items-center justify-between py-3">
+        <div class="flex items-center gap-2 text-sm text-slate-300">💬 Practice Sessions</div>
+        <div class="font-bold text-white">{{ progress_data.practice_count }}</div>
+      </div>
+
+      <a href="/webapp/progress/" class="w-full mt-2 py-3 rounded-xl bg-brand/10 text-brand text-sm font-semibold border border-brand/20 flex items-center justify-center gap-2 active:scale-95 transition-transform">
+        📊 View Full Progress Charts →
+      </a>
+    </div>
+    {% else %}
+    <div class="card p-4">
+      <div class="flex items-center gap-2 mb-3">
+        <span>📊</span>
+        <span class="font-semibold text-white">My Progress</span>
+        <div class="badge-premium ml-auto">👑</div>
+      </div>
+      <div class="bg-gold/10 border border-gold/20 rounded-xl p-3 flex items-center gap-3">
+        <span class="text-2xl">🔒</span>
+        <div class="flex-1">
+          <div class="text-sm font-semibold text-gold">Premium Required</div>
+          <div class="text-xs text-slate-400">Unlock detailed progress analytics</div>
+        </div>
+        <a href="/webapp/premium/" class="text-xs font-semibold text-gold border border-gold/30 rounded-lg px-3 py-1.5 flex-shrink-0">Upgrade</a>
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- Join Info -->
+    <div class="card p-4 flex items-center gap-3">
+      <div class="w-10 h-10 rounded-full bg-slate-700/50 flex items-center justify-center text-lg">📅</div>
+      <div>
+        <div class="text-sm font-medium text-white">Member since {{ user.date_joined|date:"F Y" }}</div>
+        <div class="text-xs text-slate-400">{{ user.date_joined|date:"d M Y" }}</div>
+      </div>
+    </div>
+
+    <!-- Partner Feedback -->
+    {% if feedbacks %}
+    <div class="card p-4">
+      <div class="flex items-center gap-2 mb-4">
+        <span>⭐</span>
+        <span class="font-semibold text-white">Partner Feedback</span>
+        <span class="text-xs text-slate-500 ml-auto">Last {{ feedbacks|length }}</span>
+      </div>
+      <div class="space-y-3">
+        {% for fb in feedbacks %}
+        <div class="bg-dark rounded-xl p-3" style="background:#242430;border-radius:12px">
+          <div class="flex items-center justify-between mb-1.5">
+            <div class="flex gap-0.5">
+              {% for i in "12345" %}
+              <span class="text-base {% if forloop.counter <= fb.rating %}star-filled{% else %}star-empty{% endif %}">★</span>
+              {% endfor %}
+            </div>
+            <span class="text-xs text-slate-500">{{ fb.created_at|timesince }} ago</span>
+          </div>
+          {% if fb.comment %}
+          <p class="text-sm text-slate-300 leading-relaxed">{{ fb.comment }}</p>
+          {% else %}
+          <p class="text-xs text-slate-500 italic">No comment left</p>
+          {% endif %}
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- Recent Conversations -->
+    {% if recent_convos %}
+    <div class="card p-4">
+      <div class="flex items-center gap-2 mb-3">
+        <span>💬</span>
+        <span class="font-semibold text-white">Recent Conversations</span>
+      </div>
+      <div class="space-y-1">
+        {% for c in recent_convos %}
+        <div class="flex items-center gap-3 py-2.5 border-b border-white/5 last:border-0">
+          <div class="w-9 h-9 rounded-full bg-gradient-to-br from-slate-600 to-slate-700 flex items-center justify-center text-sm font-bold flex-shrink-0">
+            {{ c.partner_name|first|upper }}
+          </div>
+          <div class="flex-1 min-w-0">
+            <div class="text-sm font-medium text-white truncate">{{ c.partner_name }}</div>
+            <div class="text-xs text-slate-500">{{ c.date|timesince }} ago</div>
+          </div>
+          <div class="text-xs font-mono text-slate-400">{{ c.duration }}</div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Problems Modal -->
+<div id="problemsModal" class="modal-overlay hidden" onclick="if(event.target===this)this.classList.add('hidden')">
+  <div class="modal-sheet slide-up">
+    <div class="modal-handle"></div>
+    <div class="flex items-center gap-2 mb-4">
+      <span class="text-xl">🔍</span>
+      <h3 class="text-lg font-bold text-white">AI Analysis</h3>
+    </div>
+    <div id="problemsContent">
+      <div class="flex items-center justify-center py-12">
+        <div style="width:36px;height:36px;border:3px solid #242430;border-top-color:#6366f1;border-radius:50%" class="spin"></div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+const activePage = 'home';
+document.querySelectorAll('.nav-item').forEach(el => {
+  if (el.getAttribute('href') === '/webapp/home/') el.classList.add('active');
+});
+
+async function loadProblems() {
+  document.getElementById('problemsModal').classList.remove('hidden');
+  document.getElementById('problemsContent').innerHTML = '<div class="flex items-center justify-center py-12"><div style="width:36px;height:36px;border:3px solid #242430;border-top-color:#6366f1;border-radius:50%" class="spin"></div></div>';
+  try {
+    const r = await fetch('/webapp/progress/problems/', {credentials:'same-origin'});
+    const d = await r.json();
+    if (d.ok) {
+      const a = d.analysis;
+      document.getElementById('problemsContent').innerHTML = `
+        <div class="space-y-3">
+          <p class="text-sm text-slate-400 mb-4">${a.overall_comment || ''}</p>
+          ${(a.problems||[]).map((p,i) => `
+            <div style="background:#242430;border-radius:12px;padding:12px">
+              <div class="flex gap-2.5">
+                <span style="min-width:24px;height:24px;background:rgba(239,68,68,0.15);color:#ef4444;border-radius:50%;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center">${i+1}</span>
+                <div>
+                  <p class="text-sm font-semibold text-white">${p}</p>
+                  ${a.exercises&&a.exercises[i]?`<p class="text-xs text-slate-400 mt-1">💡 ${a.exercises[i]}</p>`:''}
+                </div>
+              </div>
+            </div>
+          `).join('')}
+          ${a.timeline?`<p class="text-xs text-slate-500 text-center pt-2">⏱ ${a.timeline}</p>`:''}
+        </div>`;
+    } else {
+      document.getElementById('problemsContent').innerHTML = `<p class="text-center text-slate-400 py-8">${d.error||'Failed to load analysis'}</p>`;
+    }
+  } catch {
+    document.getElementById('problemsContent').innerHTML = '<p class="text-center text-slate-400 py-8">Error loading analysis</p>';
+  }
+}
+</script>
+{% endblock %}

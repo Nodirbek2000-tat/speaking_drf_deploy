@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#0f0f13">
+<title>Setup — Speaking Bot</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  background: #0f0f13; color: #f1f5f9;
+  font-family: system-ui, -apple-system, sans-serif;
+  min-height: 100vh; display: flex; flex-direction: column;
+  align-items: center; justify-content: flex-start;
+  padding: 32px 20px 40px;
+}
+.card {
+  width: 100%; max-width: 400px;
+  background: #1a1a22; border-radius: 20px;
+  padding: 28px 22px;
+}
+.avatar {
+  width: 72px; height: 72px; border-radius: 50%;
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  margin: 0 auto 16px; display: flex; align-items: center; justify-content: center;
+  font-size: 32px; overflow: hidden;
+}
+.avatar img { width: 100%; height: 100%; object-fit: cover; }
+.title { font-size: 20px; font-weight: 700; text-align: center; margin-bottom: 4px; }
+.sub { color: #64748b; font-size: 13px; text-align: center; margin-bottom: 24px; }
+
+.section-label {
+  font-size: 11px; font-weight: 700; color: #6366f1;
+  text-transform: uppercase; letter-spacing: 0.08em;
+  margin-bottom: 10px; margin-top: 20px;
+}
+.input-wrap { position: relative; margin-bottom: 12px; }
+.input-wrap input {
+  width: 100%; padding: 14px 16px;
+  background: #242430; border: 1.5px solid rgba(255,255,255,0.08);
+  border-radius: 12px; color: #f1f5f9; font-size: 15px;
+  outline: none; transition: border-color 0.15s;
+}
+.input-wrap input:focus { border-color: #6366f1; }
+.input-wrap input::placeholder { color: #475569; }
+
+.gender-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 24px; }
+.gender-btn {
+  background: #242430; border: 2px solid rgba(255,255,255,0.08);
+  border-radius: 14px; padding: 18px 10px; cursor: pointer;
+  transition: all 0.15s; display: flex; flex-direction: column;
+  align-items: center; gap: 6px; color: #f1f5f9;
+}
+.gender-btn:active { transform: scale(0.97); }
+.gender-btn.selected { border-color: #6366f1; background: rgba(99,102,241,0.12); }
+.gender-btn .icon { font-size: 36px; }
+.gender-btn .name { font-size: 14px; font-weight: 600; }
+
+.btn-submit {
+  width: 100%; padding: 15px; border-radius: 14px;
+  background: #6366f1; color: white; font-size: 15px; font-weight: 600;
+  border: none; cursor: pointer; transition: all 0.15s;
+  opacity: 0.45; pointer-events: none;
+}
+.btn-submit.active { opacity: 1; pointer-events: auto; }
+.btn-submit:active { background: #4f46e5; transform: scale(0.98); }
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="avatar">
+    {% if user.telegram_photo_url %}
+    <img src="{{ user.telegram_photo_url }}" alt="avatar">
+    {% else %}
+    🎤
+    {% endif %}
+  </div>
+  <div class="title">Welcome to Speaking Bot!</div>
+  <p class="sub">Let's set up your profile</p>
+
+  <form method="POST" action="/webapp/setup/" id="setupForm">
+    {% csrf_token %}
+
+    <!-- Name fields -->
+    {% if not user.first_name %}
+    <p class="section-label">Your Name</p>
+    <div class="input-wrap">
+      <input type="text" name="first_name" id="firstNameInput"
+             placeholder="First name (required)"
+             value="{{ user.first_name }}"
+             maxlength="64" autocomplete="given-name">
+    </div>
+    <div class="input-wrap">
+      <input type="text" name="last_name" id="lastNameInput"
+             placeholder="Last name (optional)"
+             value="{{ user.last_name }}"
+             maxlength="64" autocomplete="family-name">
+    </div>
+    {% else %}
+    <!-- Name already known from Telegram, just send it again -->
+    <input type="hidden" name="first_name" value="{{ user.first_name }}">
+    <input type="hidden" name="last_name" value="{{ user.last_name }}">
+    {% endif %}
+
+    <!-- Gender -->
+    <p class="section-label">I am</p>
+    <div class="gender-grid">
+      <button type="button" class="gender-btn {% if user.gender == 'male' %}selected{% endif %}"
+              onclick="selectGender('male')" id="btn-male">
+        <span class="icon">👨</span>
+        <span class="name">Male</span>
+      </button>
+      <button type="button" class="gender-btn {% if user.gender == 'female' %}selected{% endif %}"
+              onclick="selectGender('female')" id="btn-female">
+        <span class="icon">👩</span>
+        <span class="name">Female</span>
+      </button>
+    </div>
+    <input type="hidden" name="gender" id="genderInput" value="{{ user.gender }}">
+
+    <button type="submit" class="btn-submit {% if user.gender %}active{% endif %}" id="submitBtn">
+      Continue →
+    </button>
+  </form>
+</div>
+
+<script>
+if (window.Telegram && window.Telegram.WebApp) {
+  Telegram.WebApp.ready();
+  Telegram.WebApp.expand();
+}
+
+// Pre-select gender if already set
+{% if user.gender %}
+document.getElementById('submitBtn').classList.add('active');
+{% endif %}
+
+function selectGender(val) {
+  document.querySelectorAll('.gender-btn').forEach(b => b.classList.remove('selected'));
+  document.getElementById('btn-' + val).classList.add('selected');
+  document.getElementById('genderInput').value = val;
+  validate();
+}
+
+function validate() {
+  const hasGender = document.getElementById('genderInput').value;
+  {% if not user.first_name %}
+  const hasName = document.getElementById('firstNameInput').value.trim().length > 0;
+  document.getElementById('submitBtn').classList.toggle('active', !!(hasGender && hasName));
+  {% else %}
+  document.getElementById('submitBtn').classList.toggle('active', !!hasGender);
+  {% endif %}
+}
+
+{% if not user.first_name %}
+document.getElementById('firstNameInput').addEventListener('input', validate);
+{% endif %}
+
+// Trigger initial validation
+validate();
+</script>
+</body>
+</html>

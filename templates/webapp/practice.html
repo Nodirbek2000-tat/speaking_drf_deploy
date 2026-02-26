@@ -1,0 +1,172 @@
+{% extends 'webapp/base.html' %}
+{% block title %}Practice — Speaking Bot{% endblock %}
+
+{% block content %}
+<div class="safe-bottom overflow-y-auto">
+  <!-- Header -->
+  <div class="safe-top px-5 pb-2">
+    <h1 class="text-xl font-bold text-white">Practice</h1>
+    <p class="text-xs text-slate-400">Choose a scenario to practice</p>
+  </div>
+
+  <div class="px-4 space-y-5 pb-4">
+    {% for category in categories %}
+    {% if category.scenarios.all %}
+    <div>
+      <p class="section-title">{{ category.icon }} {{ category.name }}</p>
+      <div class="space-y-2">
+        {% for scenario in category.scenarios.all %}
+        {% if scenario.is_active %}
+        <button onclick="showScenario({{ scenario.id }})" class="card w-full p-4 flex items-start gap-3 text-left active:scale-98 transition-transform">
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center gap-2 mb-1">
+              <span class="text-sm font-semibold text-white">{{ scenario.title }}</span>
+              <span class="badge-{{ scenario.difficulty }} ml-auto flex-shrink-0">
+                {% if scenario.difficulty == 'easy' %}🟢{% elif scenario.difficulty == 'medium' %}🟡{% else %}🔴{% endif %}
+                {{ scenario.difficulty|title }}
+              </span>
+            </div>
+            <p class="text-xs text-slate-400 line-clamp-2 leading-relaxed">{{ scenario.description }}</p>
+            <div class="flex items-center gap-3 mt-2">
+              <span class="text-xs text-slate-500">⏱ {{ scenario.duration_minutes }} min</span>
+              <span class="text-xs text-slate-600">·</span>
+              <span class="text-xs text-slate-500 italic">AI: {{ scenario.ai_prompt|slice:":50" }}...</span>
+            </div>
+          </div>
+          <svg class="w-4 h-4 text-slate-500 flex-shrink-0 mt-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+        </button>
+        {% endif %}
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+    {% empty %}
+    <div class="flex flex-col items-center justify-center py-16 text-center">
+      <div class="text-6xl mb-4">📚</div>
+      <p class="text-lg font-semibold text-white mb-2">No scenarios yet</p>
+      <p class="text-sm text-slate-400">Admin will add practice scenarios soon</p>
+    </div>
+    {% endfor %}
+
+    <!-- Recent Sessions -->
+    {% if recent_sessions %}
+    <div>
+      <p class="section-title">Your Recent Sessions</p>
+      <div class="card overflow-hidden">
+        {% for s in recent_sessions %}
+        <div class="flex items-center gap-3 p-4 border-b border-white/5 last:border-0">
+          <div class="w-10 h-10 rounded-xl bg-brand/10 flex items-center justify-center flex-shrink-0">
+            <span class="text-lg">{{ s.scenario.category.icon }}</span>
+          </div>
+          <div class="flex-1 min-w-0">
+            <div class="text-sm font-medium text-white truncate">{{ s.scenario.title }}</div>
+            <div class="text-xs text-slate-400 flex items-center gap-1.5">
+              <span class="badge-{{ s.scenario.difficulty }}">{{ s.scenario.difficulty|title }}</span>
+              {% if s.overall_score %}<span class="text-slate-600">·</span><span class="text-success">{{ s.overall_score|floatformat:0 }}%</span>{% endif %}
+            </div>
+          </div>
+          <div class="text-xs text-slate-500">{{ s.started_at|timesince }} ago</div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Scenario Detail Modal -->
+<div id="scenarioModal" class="modal-overlay hidden" onclick="if(event.target===this)this.classList.add('hidden')">
+  <div class="modal-sheet slide-up">
+    <div class="modal-handle"></div>
+
+    <div id="scenarioLoading" class="flex items-center justify-center py-12">
+      <div style="width:36px;height:36px;border:3px solid #242430;border-top-color:#6366f1;border-radius:50%" class="spin"></div>
+    </div>
+
+    <div id="scenarioContent" class="hidden space-y-4">
+      <div class="flex items-start justify-between gap-2">
+        <h2 id="sdTitle" class="text-xl font-bold text-white leading-tight"></h2>
+        <span id="sdDiff" class="flex-shrink-0"></span>
+      </div>
+
+      <p id="sdDesc" class="text-sm text-slate-300 leading-relaxed"></p>
+
+      <div id="sdExpect" class="bg-brand/5 border border-brand/15 rounded-xl p-4">
+        <p class="text-xs font-semibold text-brand mb-2 uppercase tracking-wider">What to expect</p>
+        <p id="sdExpectText" class="text-sm text-slate-300 leading-relaxed"></p>
+      </div>
+
+      <div class="flex items-center gap-3 py-2">
+        <div class="flex items-center gap-1.5 text-sm text-slate-400">⏱ <span id="sdDuration"></span> min</div>
+        <div class="w-px h-4 bg-white/10"></div>
+        <div class="flex-1 min-w-0">
+          <p class="text-xs text-slate-500">AI Role: <span id="sdRole" class="text-slate-400"></span></p>
+        </div>
+      </div>
+
+      <button id="startPracticeBtn" onclick="startPractice()" class="btn-primary flex items-center justify-center gap-2">
+        🎤 Start Practice
+      </button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+document.querySelectorAll('.nav-item').forEach(el => {
+  if (el.getAttribute('href') === '/webapp/practice/') el.classList.add('active');
+});
+
+let currentScenarioId = null;
+
+async function showScenario(id) {
+  currentScenarioId = id;
+  document.getElementById('scenarioModal').classList.remove('hidden');
+  document.getElementById('scenarioLoading').classList.remove('hidden');
+  document.getElementById('scenarioContent').classList.add('hidden');
+
+  try {
+    const r = await fetch(`/webapp/practice/scenario/${id}/detail/`, {credentials:'same-origin'});
+    const d = await r.json();
+    document.getElementById('sdTitle').textContent = d.title;
+    document.getElementById('sdDesc').textContent = d.description;
+    document.getElementById('sdDuration').textContent = d.duration_minutes;
+    document.getElementById('sdRole').textContent = d.ai_role;
+    document.getElementById('sdExpectText').textContent = d.what_to_expect || 'An AI will guide you through a structured conversation.';
+
+    const diffColors = {easy:'badge-easy',medium:'badge-medium',hard:'badge-hard'};
+    const diffIcons = {easy:'🟢',medium:'🟡',hard:'🔴'};
+    document.getElementById('sdDiff').className = diffColors[d.difficulty] || 'badge-medium';
+    document.getElementById('sdDiff').textContent = (diffIcons[d.difficulty]||'') + ' ' + d.difficulty.charAt(0).toUpperCase() + d.difficulty.slice(1);
+
+    document.getElementById('scenarioLoading').classList.add('hidden');
+    document.getElementById('scenarioContent').classList.remove('hidden');
+  } catch {
+    document.getElementById('scenarioModal').classList.add('hidden');
+    showToast('Failed to load scenario', 'error');
+  }
+}
+
+async function startPractice() {
+  if (!currentScenarioId) return;
+  document.getElementById('startPracticeBtn').textContent = 'Starting...';
+  document.getElementById('startPracticeBtn').disabled = true;
+
+  try {
+    const r = await fetch(`/webapp/practice/start/${currentScenarioId}/`, {
+      method: 'POST',
+      headers: {'X-CSRFToken': getCsrf()},
+      credentials: 'same-origin',
+    });
+    const d = await r.json();
+    if (d.redirect) window.location.href = d.redirect;
+    else showToast('Failed to start session', 'error');
+  } catch {
+    showToast('Error starting practice', 'error');
+    document.getElementById('startPracticeBtn').textContent = '🎤 Start Practice';
+    document.getElementById('startPracticeBtn').disabled = false;
+  }
+}
+</script>
+{% endblock %}

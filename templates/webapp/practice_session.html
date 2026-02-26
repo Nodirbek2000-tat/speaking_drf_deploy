@@ -1,0 +1,287 @@
+{% extends 'webapp/base.html' %}
+{% block title %}{{ scenario.title }} — Practice{% endblock %}
+
+{% block bottom_nav %}{% endblock %}
+
+{% block content %}
+<div class="fixed inset-0 flex flex-col" style="background:#0f0f13">
+
+  <!-- Header -->
+  <div class="safe-top px-5 py-3 flex items-center justify-between border-b border-white/5">
+    <div class="flex items-center gap-2">
+      <div class="w-2 h-2 rounded-full bg-brand pulse-dot"></div>
+      <span class="text-sm font-medium text-white">{{ scenario.title }}</span>
+    </div>
+    <div class="flex items-center gap-3">
+      <span id="sessionTimer" class="font-mono text-sm font-bold text-slate-300">0:00</span>
+      <button onclick="confirmEnd()" class="text-xs text-danger border border-danger/30 rounded-lg px-3 py-1.5 active:scale-95 transition-transform">End</button>
+    </div>
+  </div>
+
+  <!-- Conversation -->
+  <div class="flex-1 overflow-y-auto px-4 py-4 space-y-3" id="chatContainer">
+    <div class="flex items-center justify-center py-6">
+      <div class="text-center">
+        <div class="text-4xl mb-2">🤖</div>
+        <p class="text-sm text-slate-400">AI is preparing...</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- AI Speaking Indicator -->
+  <div id="aiSpeaking" class="hidden px-4 py-2 flex items-center gap-2">
+    <div class="flex gap-1 items-center">
+      <div class="w-1.5 h-4 bg-brand rounded-full" style="animation: barPulse 0.8s ease-in-out infinite; animation-delay: 0s"></div>
+      <div class="w-1.5 h-6 bg-brand rounded-full" style="animation: barPulse 0.8s ease-in-out infinite; animation-delay: 0.1s"></div>
+      <div class="w-1.5 h-5 bg-brand rounded-full" style="animation: barPulse 0.8s ease-in-out infinite; animation-delay: 0.2s"></div>
+      <div class="w-1.5 h-3 bg-brand rounded-full" style="animation: barPulse 0.8s ease-in-out infinite; animation-delay: 0.3s"></div>
+      <div class="w-1.5 h-5 bg-brand rounded-full" style="animation: barPulse 0.8s ease-in-out infinite; animation-delay: 0.15s"></div>
+    </div>
+    <span class="text-xs text-slate-400">AI is speaking...</span>
+  </div>
+
+  <!-- Controls -->
+  <div class="px-5 py-4 border-t border-white/5 flex items-center justify-center gap-8" style="padding-bottom: calc(16px + env(safe-area-inset-bottom,0px))">
+    <!-- Hold to Talk -->
+    <div class="flex flex-col items-center gap-2">
+      <button id="micBtn"
+        onmousedown="startRecording()" ontouchstart="startRecording(event)"
+        onmouseup="stopRecording()" ontouchend="stopRecording()"
+        ontouchcancel="stopRecording()"
+        class="w-16 h-16 rounded-full border-2 border-white/10 flex items-center justify-center transition-all active:scale-95"
+        style="background:#242430">
+        <svg class="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"/></svg>
+      </button>
+      <span id="micLabel" class="text-xs text-slate-400">Hold to Talk</span>
+    </div>
+
+    <!-- End Practice -->
+    <div class="flex flex-col items-center gap-2">
+      <button onclick="confirmEnd()" class="w-16 h-16 rounded-full bg-danger/15 border-2 border-danger/30 flex items-center justify-center transition-all active:scale-95">
+        <svg class="w-7 h-7 text-danger" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 10a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z"/></svg>
+      </button>
+      <span class="text-xs text-danger">Stop</span>
+    </div>
+  </div>
+</div>
+
+<!-- Feedback Modal -->
+<div id="feedbackModal" class="hidden fixed inset-0 z-[300] overflow-y-auto" style="background:#0f0f13">
+  <div class="min-h-full px-5 py-8">
+    <div class="safe-top">
+      <div class="text-center mb-6">
+        <div class="text-5xl mb-3">📊</div>
+        <h2 class="text-2xl font-bold text-white">Session Complete!</h2>
+        <p class="text-slate-400 text-sm mt-1">Here's your performance analysis</p>
+      </div>
+
+      <!-- Score -->
+      <div id="scoreSection" class="card p-5 mb-4 text-center">
+        <div id="scoreCircle" class="w-20 h-20 rounded-full flex items-center justify-center text-3xl font-black mx-auto mb-2" style="background:rgba(99,102,241,0.15);color:#6366f1">—</div>
+        <p class="text-slate-400 text-sm">Overall Score</p>
+      </div>
+
+      <!-- Overall Comment -->
+      <div id="overallComment" class="card p-4 mb-4 hidden">
+        <p id="overallCommentText" class="text-sm text-slate-300 leading-relaxed text-center"></p>
+      </div>
+
+      <!-- Strengths -->
+      <div id="strengthsSection" class="card p-4 mb-3 hidden">
+        <h3 class="text-sm font-semibold text-success mb-3 flex items-center gap-2">✅ Strengths</h3>
+        <ul id="strengthsList" class="space-y-2"></ul>
+      </div>
+
+      <!-- Improvements -->
+      <div id="improvSection" class="card p-4 mb-3 hidden">
+        <h3 class="text-sm font-semibold text-gold mb-3 flex items-center gap-2">⚠️ Areas to Improve</h3>
+        <ul id="improvList" class="space-y-2"></ul>
+      </div>
+
+      <!-- Mistakes -->
+      <div id="mistakesSection" class="card p-4 mb-4 hidden">
+        <h3 class="text-sm font-semibold text-danger mb-3 flex items-center gap-2">❌ Mistakes</h3>
+        <ul id="mistakesList" class="space-y-2"></ul>
+      </div>
+
+      <button onclick="window.location.href='/webapp/practice/'" class="btn-primary">
+        Back to Practice
+      </button>
+      <button onclick="window.location.href='/webapp/home/'" class="btn-secondary mt-2">
+        Go Home
+      </button>
+    </div>
+  </div>
+</div>
+
+<style>
+@keyframes barPulse { 0%,100%{transform:scaleY(0.5)} 50%{transform:scaleY(1.2)} }
+.msg-ai { display: flex; align-items: flex-start; gap: 10px; }
+.msg-ai .bubble { background: #1a1a22; border: 1px solid rgba(255,255,255,0.06); color: #e2e8f0; }
+.msg-user { display: flex; align-items: flex-start; gap: 10px; flex-direction: row-reverse; }
+.msg-user .bubble { background: #4f46e5; color: white; }
+.bubble { border-radius: 18px; padding: 10px 14px; font-size: 14px; line-height: 1.5; max-width: 80%; word-break: break-word; }
+</style>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+window._inPractice = true;
+
+const sessionId = {{ session.id }};
+let ws = null;
+let timerInterval = null;
+let secs = 0;
+let mediaRecorder = null, chunks = [];
+let recording = false;
+
+// Timer
+timerInterval = setInterval(() => {
+  secs++;
+  document.getElementById('sessionTimer').textContent = formatTime(secs);
+}, 1000);
+
+// Connect WebSocket
+const wsProto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+ws = new WebSocket(`${wsProto}//${location.host}/ws/practice/${sessionId}/`);
+ws.binaryType = 'arraybuffer';
+
+ws.onmessage = async (e) => {
+  if (typeof e.data === 'string') {
+    const d = JSON.parse(e.data);
+    if (d.type === 'ai_text') {
+      addMsg('ai', d.text);
+      document.getElementById('aiSpeaking').classList.remove('hidden');
+    } else if (d.type === 'user_transcript') {
+      addMsg('user', d.text);
+    } else if (d.type === 'feedback') {
+      showFeedback(d.data);
+    }
+  } else {
+    // Audio
+    document.getElementById('aiSpeaking').classList.remove('hidden');
+    const blob = new Blob([e.data], { type: 'audio/mpeg' });
+    const audio = new Audio(URL.createObjectURL(blob));
+    audio.onended = () => document.getElementById('aiSpeaking').classList.add('hidden');
+    audio.play().catch(() => document.getElementById('aiSpeaking').classList.add('hidden'));
+  }
+};
+
+ws.onerror = () => showToast('Connection error. Server may be down.', 'error');
+ws.onclose = (e) => {
+  if (e.code === 4001) { showToast('Please log in again', 'error'); window.location.href = '/webapp/'; }
+  else if (e.code === 4004) { showToast('Session not found', 'error'); window.location.href = '/webapp/practice/'; }
+};
+
+function addMsg(role, text) {
+  const container = document.getElementById('chatContainer');
+  // Remove loading indicator
+  const loader = container.querySelector('.text-center');
+  if (loader) loader.remove();
+
+  const div = document.createElement('div');
+  div.className = role === 'ai' ? 'msg-ai' : 'msg-user';
+  div.innerHTML = `
+    ${role === 'ai' ? '<div class="w-8 h-8 rounded-full bg-brand/20 flex items-center justify-center text-sm flex-shrink-0">🤖</div>' : ''}
+    <div class="bubble">${text}</div>
+  `;
+  container.appendChild(div);
+  container.scrollTop = container.scrollHeight;
+}
+
+async function startRecording(e) {
+  if (e) e.preventDefault();
+  if (recording) return;
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    chunks = [];
+    const mimeType = MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : 'audio/mp4';
+    mediaRecorder = new MediaRecorder(stream, { mimeType });
+    mediaRecorder.ondataavailable = ev => { if (ev.data.size > 0) chunks.push(ev.data); };
+    mediaRecorder.onstop = () => {
+      const blob = new Blob(chunks, { type: mimeType });
+      if (ws && ws.readyState === WebSocket.OPEN) ws.send(blob);
+      stream.getTracks().forEach(t => t.stop());
+    };
+    mediaRecorder.start();
+    recording = true;
+    document.getElementById('micBtn').style.background = 'rgba(99,102,241,0.25)';
+    document.getElementById('micBtn').style.borderColor = '#6366f1';
+    document.getElementById('micLabel').textContent = '🔴 Recording...';
+  } catch {
+    showToast('Microphone permission denied', 'error');
+  }
+}
+
+function stopRecording() {
+  if (!recording || !mediaRecorder) return;
+  mediaRecorder.stop();
+  recording = false;
+  document.getElementById('micBtn').style.background = '#242430';
+  document.getElementById('micBtn').style.borderColor = 'rgba(255,255,255,0.1)';
+  document.getElementById('micLabel').textContent = 'Hold to Talk';
+}
+
+function confirmEnd() {
+  if (confirm('End this practice session?')) {
+    endSession();
+  }
+}
+
+function endSession() {
+  clearInterval(timerInterval);
+  window._inPractice = false;
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({ type: 'end' }));
+    showToast('Analyzing your performance...', 'info');
+  } else {
+    // WS ulanmagan — orqaga qayt
+    window.location.href = '/webapp/practice/';
+  }
+}
+
+function showFeedback(data) {
+  const modal = document.getElementById('feedbackModal');
+  modal.classList.remove('hidden');
+  modal.style.display = 'block';
+
+  // Score
+  const score = data.score || 0;
+  const scoreEl = document.getElementById('scoreCircle');
+  scoreEl.textContent = score + '%';
+  if (score >= 80) scoreEl.style.color = '#10b981';
+  else if (score >= 60) scoreEl.style.color = '#f59e0b';
+  else scoreEl.style.color = '#ef4444';
+
+  // Overall comment
+  if (data.overall_comment) {
+    document.getElementById('overallComment').classList.remove('hidden');
+    document.getElementById('overallCommentText').textContent = data.overall_comment;
+  }
+
+  // Strengths
+  if (data.strengths && data.strengths.length) {
+    document.getElementById('strengthsSection').classList.remove('hidden');
+    document.getElementById('strengthsList').innerHTML = data.strengths.map(s =>
+      `<li class="text-sm text-slate-300 flex items-start gap-2"><span class="text-success mt-0.5">•</span>${s}</li>`
+    ).join('');
+  }
+
+  // Improvements
+  if (data.improvements && data.improvements.length) {
+    document.getElementById('improvSection').classList.remove('hidden');
+    document.getElementById('improvList').innerHTML = data.improvements.map(s =>
+      `<li class="text-sm text-slate-300 flex items-start gap-2"><span class="text-gold mt-0.5">•</span>${s}</li>`
+    ).join('');
+  }
+
+  // Mistakes
+  if (data.mistakes && data.mistakes.length) {
+    document.getElementById('mistakesSection').classList.remove('hidden');
+    document.getElementById('mistakesList').innerHTML = data.mistakes.map(m =>
+      `<li class="text-sm text-slate-300 flex items-start gap-2"><span class="text-danger mt-0.5">→</span><span>${typeof m === 'object' ? (m.correction || JSON.stringify(m)) : m}</span></li>`
+    ).join('');
+  }
+}
+</script>
+{% endblock %}

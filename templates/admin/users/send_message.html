@@ -1,0 +1,66 @@
+{% extends "admin/base_site.html" %}
+{% block title %}Xabar Yuborish{% endblock %}
+
+{% block content %}
+<div style="max-width:560px;margin:0 auto">
+
+  <div style="background:#1e1e2e;border-radius:10px;padding:24px;margin-bottom:20px">
+    <h2 style="color:#cdd6f4;margin:0 0 8px">✉️ Telegram Xabar Yuborish</h2>
+    <p style="color:#a6adc8;margin:0">
+      Foydalanuvchi:
+      <b style="color:#89dceb">{{ full_name }}</b>
+      &nbsp;|&nbsp;
+      <code style="color:#f38ba8">{{ telegram_id }}</code>
+    </p>
+  </div>
+
+  {% if messages %}
+    {% for msg in messages %}
+      <div style="padding:10px 16px;border-radius:6px;margin-bottom:12px;
+        {% if msg.tags == 'success' %}background:#1e4620;color:#8dce9a;border:1px solid #28a745
+        {% else %}background:#4a1818;color:#e06c75;border:1px solid #dc3545{% endif %}">
+        {{ msg }}
+      </div>
+    {% endfor %}
+  {% endif %}
+
+  <form method="post" style="background:#181825;border-radius:10px;padding:24px">
+    {% csrf_token %}
+    <input type="hidden" name="telegram_id" value="{{ telegram_id }}">
+
+    <div style="margin-bottom:16px">
+      <label style="color:#cdd6f4;display:block;margin-bottom:8px;font-weight:bold">
+        📝 Xabar matni <small style="color:#a6adc8;font-weight:normal">(HTML qo'llab-quvvatlanadi)</small>
+      </label>
+      <textarea
+        name="text"
+        rows="7"
+        required
+        placeholder="Masalan: &lt;b&gt;Salom!&lt;/b&gt; Premiumingiz faollashtirildi 🎉"
+        style="width:100%;box-sizing:border-box;padding:12px;font-size:14px;
+          background:#1e1e2e;color:#cdd6f4;border:1px solid #313244;
+          border-radius:6px;resize:vertical;font-family:monospace"
+      ></textarea>
+      <small style="color:#585b70">
+        Ishlatish mumkin: &lt;b&gt;qalin&lt;/b&gt;, &lt;i&gt;kursiv&lt;/i&gt;,
+        &lt;code&gt;kod&lt;/code&gt;, &lt;a href="..."&gt;link&lt;/a&gt;
+      </small>
+    </div>
+
+    <div style="display:flex;gap:10px;align-items:center">
+      <button
+        type="submit"
+        style="background:#17a2b8;color:#fff;border:none;padding:10px 24px;
+          border-radius:6px;font-size:14px;cursor:pointer;font-weight:bold"
+      >
+        📤 Yuborish
+      </button>
+      <a
+        href="../"
+        style="color:#a6adc8;text-decoration:none;font-size:14px"
+      >← Orqaga</a>
+    </div>
+  </form>
+
+</div>
+{% endblock %}

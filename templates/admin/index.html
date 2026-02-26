@@ -1,0 +1,261 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+
+{% block title %}Admin Dashboard{% endblock %}
+
+{% block content %}
+<style>
+  .dash-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:14px; margin-bottom:24px }
+  .stat-card {
+    border-radius:10px; padding:18px 20px;
+    display:flex; flex-direction:column; gap:6px;
+    color:#fff; text-decoration:none;
+  }
+  .stat-card .num { font-size:32px; font-weight:700; line-height:1 }
+  .stat-card .lbl { font-size:13px; opacity:.85 }
+  .card-teal    { background:linear-gradient(135deg,#1a8a77,#20c997) }
+  .card-gold    { background:linear-gradient(135deg,#b8860b,#ffd700); color:#1a1a1a }
+  .card-blue    { background:linear-gradient(135deg,#1560a0,#339af0) }
+  .card-green   { background:linear-gradient(135deg,#166534,#28a745) }
+  .card-purple  { background:linear-gradient(135deg,#5b2d8e,#9c6fe4) }
+  .card-orange  { background:linear-gradient(135deg,#c0480c,#fd7e14) }
+
+  .section { background:#1e1e2e; border-radius:10px; padding:18px; margin-bottom:20px }
+  .section h3 { color:#cdd6f4; margin:0 0 14px; font-size:15px; font-weight:600 }
+  .dash-table { width:100%; border-collapse:collapse; font-size:13px }
+  .dash-table th { color:#a6adc8; font-weight:600; padding:6px 10px; text-align:left;
+                   border-bottom:1px solid #313244 }
+  .dash-table td { color:#cdd6f4; padding:7px 10px; border-bottom:1px solid #24243a }
+  .dash-table tr:last-child td { border-bottom:none }
+  .dash-table tr:hover td { background:#24243a }
+
+  .badge {
+    display:inline-block; padding:2px 9px; border-radius:10px;
+    font-size:11px; font-weight:600; color:#fff
+  }
+  .b-ielts   { background:#28a745 }
+  .b-cefr    { background:#007bff }
+  .b-start   { background:#20c997 }
+  .b-ai      { background:#6f42c1 }
+  .b-word    { background:#fd7e14 }
+  .b-premium { background:#dc3545 }
+  .b-warn    { background:#ffc107; color:#1a1a1a }
+
+  .two-col { display:grid; grid-template-columns:1fr 1fr; gap:14px }
+  .btn-sm {
+    display:inline-block; padding:3px 10px; border-radius:4px;
+    font-size:12px; text-decoration:none; color:#fff; margin-right:4px
+  }
+  .btn-green { background:#28a745 }
+  .btn-red   { background:#dc3545 }
+
+  @media(max-width:800px){
+    .dash-grid,.two-col { grid-template-columns:1fr }
+  }
+</style>
+
+{# ─── Stat kartalar ─────────────────────────────────────────────────────────── #}
+<div class="dash-grid">
+  <div class="stat-card card-teal">
+    <div class="num">{{ total_users|default:0 }}</div>
+    <div class="lbl">&#128101; Jami Bot Foydalanuvchilar</div>
+  </div>
+  <div class="stat-card card-gold">
+    <div class="num">{{ premium_users|default:0 }}</div>
+    <div class="lbl">&#128142; Premium Foydalanuvchilar</div>
+  </div>
+  <div class="stat-card card-blue">
+    <div class="num">{{ today_active|default:0 }}</div>
+    <div class="lbl">&#9889; Bugun Faol (noyob)</div>
+  </div>
+  <div class="stat-card card-green">
+    <div class="num">{{ total_ielts|default:0 }}</div>
+    <div class="lbl">&#128221; IELTS Mock (jami)</div>
+  </div>
+  <div class="stat-card card-purple">
+    <div class="num">{{ total_cefr|default:0 }}</div>
+    <div class="lbl">&#128202; CEFR Mock (jami)</div>
+  </div>
+  <div class="stat-card card-orange">
+    <div class="num">{{ total_words|default:0 }}</div>
+    <div class="lbl">&#128218; Lug'at So'zlari</div>
+  </div>
+</div>
+
+{# ─── Quick Actions ──────────────────────────────────────────────────────────── #}
+<div class="section" style="margin-bottom:20px">
+  <h3>⚡ Tezkor Amallar</h3>
+  <div style="display:flex;flex-wrap:wrap;gap:10px">
+    <a href="/admin/users/user/broadcast/"
+       style="background:linear-gradient(135deg,#c0480c,#fd7e14);color:#fff;
+              padding:10px 20px;border-radius:8px;text-decoration:none;
+              font-weight:bold;font-size:13px;display:flex;align-items:center;gap:8px">
+      📢 Broadcast — Hammaga xabar
+    </a>
+    <a href="/admin/users/user/"
+       style="background:linear-gradient(135deg,#1560a0,#339af0);color:#fff;
+              padding:10px 20px;border-radius:8px;text-decoration:none;
+              font-weight:bold;font-size:13px;display:flex;align-items:center;gap:8px">
+      👥 Foydalanuvchilar
+    </a>
+    <a href="/admin/premium/premiumpurchase/"
+       style="background:linear-gradient(135deg,#b8860b,#ffd700);color:#1a1a1a;
+              padding:10px 20px;border-radius:8px;text-decoration:none;
+              font-weight:bold;font-size:13px;display:flex;align-items:center;gap:8px">
+      💎 Premium So'rovlari
+    </a>
+    <a href="/admin/users/botactivity/"
+       style="background:linear-gradient(135deg,#1a8a77,#20c997);color:#fff;
+              padding:10px 20px;border-radius:8px;text-decoration:none;
+              font-weight:bold;font-size:13px;display:flex;align-items:center;gap:8px">
+      📊 Bot Faoliyati
+    </a>
+  </div>
+</div>
+
+{# ─── Pending premium so'rovlari ────────────────────────────────────────────── #}
+{% if pending_premium %}
+<div class="section">
+  <h3>&#128142; Kutilayotgan Premium So'rovlari
+    <span class="badge b-premium" style="margin-left:8px">{{ pending_premium_count }}</span>
+  </h3>
+  <table class="dash-table">
+    <tr>
+      <th>Foydalanuvchi</th><th>Reja</th><th>Telegram</th><th>Sana</th><th>Amal</th>
+    </tr>
+    {% for p in pending_premium %}
+    <tr>
+      <td><b>{{ p.user.username }}</b></td>
+      <td>{{ p.plan.name }} &#8212; ${{ p.plan.price_usd }}</td>
+      <td>
+        {% if p.telegram_username %}@{{ p.telegram_username }}{% endif %}
+        {% if p.telegram_id %}&nbsp;<code>{{ p.telegram_id }}</code>{% endif %}
+      </td>
+      <td style="color:#a6adc8">{{ p.created_at|date:"d.m.Y H:i" }}</td>
+      <td>
+        <a class="btn-sm btn-green" href="/admin/premium/premiumpurchase/{{ p.pk }}/confirm/">&#10003; Tasdiq</a>
+        <a class="btn-sm btn-red" href="/admin/premium/premiumpurchase/{{ p.pk }}/reject/">&#10007; Rad</a>
+      </td>
+    </tr>
+    {% endfor %}
+  </table>
+</div>
+{% endif %}
+
+{# ─── Premium muddati tugayapti ─────────────────────────────────────────────── #}
+{% if expiring_soon %}
+<div class="section">
+  <h3>&#9888; Premium Muddati Tugayapti (3 kun ichida)</h3>
+  <table class="dash-table">
+    <tr><th>Foydalanuvchi</th><th>Tugash sanasi</th><th>Holat</th></tr>
+    {% for u in expiring_soon %}
+    <tr>
+      <td><b>{{ u.username }}</b>
+        {% if u.telegram_id %}&nbsp;<code style="font-size:11px">{{ u.telegram_id }}</code>{% endif %}
+      </td>
+      <td>{{ u.premium_expires|date:"d.m.Y H:i" }}</td>
+      <td><span class="badge b-warn">&#9201; Tugayapti</span></td>
+    </tr>
+    {% endfor %}
+  </table>
+</div>
+{% endif %}
+
+{# ─── Faoliyat + Mock natijalar ──────────────────────────────────────────────── #}
+<div class="two-col">
+
+  <div class="section">
+    <h3>&#128198; So'nggi Bot Faoliyatlari</h3>
+    <table class="dash-table">
+      <tr><th>Ism</th><th>Faoliyat</th><th>Ball</th><th>Vaqt</th></tr>
+      {% for a in recent_activities %}
+      <tr>
+        <td>
+          <b>{{ a.full_name }}</b>
+          {% if a.username %}<br><small style="color:#585b70">@{{ a.username }}</small>{% endif %}
+        </td>
+        <td>
+          {% if a.activity_type == "ielts_mock" %}<span class="badge b-ielts">IELTS</span>
+          {% elif a.activity_type == "cefr_mock" %}<span class="badge b-cefr">CEFR</span>
+          {% elif a.activity_type == "start" %}<span class="badge b-start">Start</span>
+          {% elif a.activity_type == "ai_chat" %}<span class="badge b-ai">AI</span>
+          {% elif a.activity_type == "word_lookup" %}<span class="badge b-word">Lug'at</span>
+          {% elif a.activity_type == "premium_request" %}<span class="badge b-premium">Premium</span>
+          {% else %}<span class="badge" style="background:#6c757d">{{ a.activity_type }}</span>{% endif %}
+        </td>
+        <td>
+          {% if a.activity_type == "ielts_mock" %}<b style="color:#28a745">{{ a.data.band|default:"&#8212;" }}</b>
+          {% elif a.activity_type == "cefr_mock" %}<b style="color:#007bff">{{ a.data.score|default:"&#8212;" }}</b>
+          {% else %}&#8212;{% endif %}
+        </td>
+        <td style="color:#585b70;white-space:nowrap">{{ a.created_at|date:"d.m H:i" }}</td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="4" style="color:#585b70;text-align:center;padding:16px">Faoliyat yo'q</td></tr>
+      {% endfor %}
+    </table>
+  </div>
+
+  <div class="section">
+    <h3>&#128221; So'nggi IELTS Natijalar</h3>
+    <table class="dash-table">
+      <tr><th>Ism</th><th>Band</th><th>Vaqt</th></tr>
+      {% for a in recent_ielts %}
+      <tr>
+        <td><b>{{ a.full_name }}</b></td>
+        <td>
+          {% with b=a.data.band %}
+          {% if b %}
+            <b style="font-size:15px;color:{% if b >= 7 %}#28a745{% elif b >= 5 %}#ffc107{% else %}#dc3545{% endif %}">
+              &#11088; {{ b }}
+            </b>
+          {% else %}&#8212;{% endif %}
+          {% endwith %}
+        </td>
+        <td style="color:#585b70">{{ a.created_at|date:"d.m H:i" }}</td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="3" style="color:#585b70;text-align:center;padding:12px">Natija yo'q</td></tr>
+      {% endfor %}
+    </table>
+
+    <h3 style="margin-top:18px">&#128202; So'nggi CEFR Natijalar</h3>
+    <table class="dash-table">
+      <tr><th>Ism</th><th>Ball</th><th>Daraja</th><th>Vaqt</th></tr>
+      {% for a in recent_cefr %}
+      <tr>
+        <td><b>{{ a.full_name }}</b></td>
+        <td><b style="color:#007bff">{{ a.data.score|default:"&#8212;" }}</b></td>
+        <td>{{ a.data.level|default:"&#8212;" }}</td>
+        <td style="color:#585b70">{{ a.created_at|date:"d.m H:i" }}</td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="4" style="color:#585b70;text-align:center;padding:12px">Natija yo'q</td></tr>
+      {% endfor %}
+    </table>
+  </div>
+
+</div>
+
+{# ─── App list ───────────────────────────────────────────────────────────────── #}
+{% if app_list %}
+<div class="section">
+  <h3>&#128193; Barcha bo'limlar</h3>
+  {% for app in app_list %}
+  <div style="margin-bottom:12px">
+    <b style="color:#89dceb">{{ app.name }}</b>
+    <div style="margin-top:6px;display:flex;flex-wrap:wrap;gap:6px">
+      {% for model in app.models %}
+      <a href="{{ model.admin_url }}"
+         style="background:#313244;color:#cdd6f4;padding:4px 12px;
+                border-radius:6px;font-size:12px;text-decoration:none">
+        {{ model.name }}
+      </a>
+      {% endfor %}
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+{% endblock %}

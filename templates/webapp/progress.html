@@ -1,0 +1,319 @@
+{% extends 'webapp/base.html' %}
+{% block title %}My Progress — Speaking Bot{% endblock %}
+
+{% block content %}
+<div class="safe-bottom overflow-y-auto" id="mainContent">
+  <!-- Header -->
+  <div class="safe-top px-5 pb-2 flex items-center gap-3">
+    <a href="/webapp/home/" class="w-9 h-9 rounded-xl bg-white/5 flex items-center justify-center flex-shrink-0">
+      <svg class="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+    </a>
+    <div>
+      <h1 class="text-xl font-bold text-white">My Progress</h1>
+      <p class="text-xs text-slate-400">Track your English learning journey</p>
+    </div>
+    {% if is_premium %}
+    <div class="badge-premium ml-auto">👑</div>
+    {% endif %}
+  </div>
+
+  <div class="px-4 pb-24 space-y-4">
+
+    <!-- Stats overview -->
+    <div class="grid grid-cols-3 gap-3">
+      <div class="card p-3 text-center">
+        <div class="text-2xl font-black text-white">{{ ielts_count }}</div>
+        <div class="text-xs text-slate-400 mt-0.5">IELTS</div>
+      </div>
+      <div class="card p-3 text-center">
+        <div class="text-2xl font-black text-white">{{ cefr_count }}</div>
+        <div class="text-xs text-slate-400 mt-0.5">CEFR</div>
+      </div>
+      <div class="card p-3 text-center">
+        <div class="text-2xl font-black text-brand">{{ voice_rooms_count }}</div>
+        <div class="text-xs text-slate-400 mt-0.5">Calls</div>
+      </div>
+    </div>
+
+    <!-- IELTS Chart -->
+    <div class="card p-4">
+      <div class="flex items-center justify-between mb-4">
+        <div>
+          <p class="text-sm font-bold text-white">IELTS Speaking</p>
+          <p class="text-xs text-slate-400">Band score trend</p>
+        </div>
+        <div id="ieltsLatest" class="text-right"></div>
+      </div>
+      <div id="ieltsChart" style="height:120px;position:relative">
+        <canvas id="ieltsCanvas"></canvas>
+        <div id="ieltsEmpty" class="hidden absolute inset-0 flex items-center justify-center">
+          <p class="text-slate-500 text-sm">No IELTS tests yet</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- CEFR Chart -->
+    <div class="card p-4">
+      <div class="flex items-center justify-between mb-4">
+        <div>
+          <p class="text-sm font-bold text-white">CEFR Mock</p>
+          <p class="text-xs text-slate-400">Score out of 75</p>
+        </div>
+        <div id="cefrLatest" class="text-right"></div>
+      </div>
+      <div id="cefrChart" style="height:120px;position:relative">
+        <canvas id="cefrCanvas"></canvas>
+        <div id="cefrEmpty" class="hidden absolute inset-0 flex items-center justify-center">
+          <p class="text-slate-500 text-sm">No CEFR tests yet</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Practice Chart -->
+    {% if practice_count > 0 %}
+    <div class="card p-4">
+      <div class="flex items-center justify-between mb-4">
+        <div>
+          <p class="text-sm font-bold text-white">Practice Sessions</p>
+          <p class="text-xs text-slate-400">Performance score</p>
+        </div>
+        <div id="practiceLatest" class="text-right"></div>
+      </div>
+      <div style="height:120px;position:relative">
+        <canvas id="practiceCanvas"></canvas>
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- AI Problems Analysis -->
+    <div class="card p-4">
+      <div class="flex items-center gap-3 mb-3">
+        <div class="w-10 h-10 rounded-xl bg-brand/15 flex items-center justify-center text-xl flex-shrink-0">🤖</div>
+        <div>
+          <p class="text-sm font-bold text-white">AI Analysis</p>
+          <p class="text-xs text-slate-400">Personalized advice</p>
+        </div>
+        {% if not is_premium %}
+        <div class="ml-auto badge-premium text-xs">👑 Premium</div>
+        {% endif %}
+      </div>
+      {% if is_premium %}
+      <button onclick="loadAnalysis()" id="analysisBtn"
+        class="w-full py-3 rounded-xl bg-brand/10 text-brand text-sm font-semibold border border-brand/20 active:scale-95 transition-transform">
+        🔍 Analyze My Weaknesses
+      </button>
+      <div id="analysisContent" class="hidden mt-4 space-y-3"></div>
+      {% else %}
+      <div class="text-center py-4">
+        <p class="text-sm text-slate-400 mb-3">Get detailed AI analysis of your weaknesses</p>
+        <a href="/webapp/premium/" class="inline-block py-2 px-5 rounded-xl bg-gold/15 text-gold text-sm font-semibold border border-gold/25">
+          Upgrade to Premium
+        </a>
+      </div>
+      {% endif %}
+    </div>
+
+    <!-- Tips based on data -->
+    <div class="card p-4" id="tipsCard">
+      <p class="text-sm font-bold text-white mb-3">💡 Study Tips</p>
+      <div id="tipsList" class="space-y-2"></div>
+    </div>
+
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+document.querySelectorAll('.nav-item').forEach(el => {
+  if (el.getAttribute('href') === '/webapp/home/') el.classList.add('active');
+});
+
+const ieltsData = {{ ielts_data|safe }};
+const cefrData = {{ cefr_data|safe }};
+const practiceData = {{ practice_data|safe }};
+
+// ── Mini chart helper ─────────────────────────────────────
+function drawLineChart(canvasId, labels, values, maxVal, color, emptyId) {
+  if (!values.length) {
+    if (emptyId) document.getElementById(emptyId).classList.remove('hidden');
+    return;
+  }
+  const canvas = document.getElementById(canvasId);
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  canvas.width = canvas.offsetWidth || canvas.parentElement.offsetWidth || 300;
+  canvas.height = canvas.offsetParent ? canvas.parentElement.offsetHeight : 120;
+  const W = canvas.width, H = canvas.height;
+  const pad = { top: 10, right: 15, bottom: 22, left: 28 };
+  const chartW = W - pad.left - pad.right;
+  const chartH = H - pad.top - pad.bottom;
+  const min = Math.max(0, Math.min(...values) - (maxVal * 0.1));
+  const max = maxVal;
+  const range = max - min || 1;
+
+  ctx.clearRect(0, 0, W, H);
+
+  // Grid lines
+  ctx.strokeStyle = 'rgba(255,255,255,0.05)';
+  ctx.lineWidth = 1;
+  [0.25, 0.5, 0.75, 1].forEach(f => {
+    const y = pad.top + chartH * (1 - f);
+    ctx.beginPath(); ctx.moveTo(pad.left, y); ctx.lineTo(W - pad.right, y); ctx.stroke();
+  });
+
+  const xStep = values.length > 1 ? chartW / (values.length - 1) : chartW;
+  const pts = values.map((v, i) => ({
+    x: pad.left + (values.length > 1 ? i * xStep : chartW / 2),
+    y: pad.top + chartH * (1 - (v - min) / range)
+  }));
+
+  // Gradient fill
+  const grad = ctx.createLinearGradient(0, pad.top, 0, pad.top + chartH);
+  grad.addColorStop(0, color + '40');
+  grad.addColorStop(1, color + '05');
+  ctx.beginPath();
+  ctx.moveTo(pts[0].x, pad.top + chartH);
+  pts.forEach(p => ctx.lineTo(p.x, p.y));
+  ctx.lineTo(pts[pts.length-1].x, pad.top + chartH);
+  ctx.closePath();
+  ctx.fillStyle = grad;
+  ctx.fill();
+
+  // Line
+  ctx.beginPath();
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 2;
+  ctx.lineJoin = 'round';
+  pts.forEach((p, i) => i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y));
+  ctx.stroke();
+
+  // Dots
+  pts.forEach((p, i) => {
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, 3.5, 0, Math.PI * 2);
+    ctx.fillStyle = color;
+    ctx.fill();
+    ctx.strokeStyle = '#1a1a22';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+  });
+
+  // X labels
+  ctx.fillStyle = '#475569';
+  ctx.font = '9px system-ui';
+  ctx.textAlign = 'center';
+  const step = values.length > 6 ? Math.ceil(values.length / 6) : 1;
+  pts.forEach((p, i) => {
+    if (i % step === 0) ctx.fillText(labels[i] || '', p.x, H - 4);
+  });
+
+  // Y labels
+  ctx.textAlign = 'right';
+  ctx.fillText(min.toFixed(1), pad.left - 4, pad.top + chartH);
+  ctx.fillText(max.toFixed(1), pad.left - 4, pad.top + 8);
+}
+
+// ── Render charts ──────────────────────────────────────────
+window.addEventListener('load', () => {
+  // IELTS
+  if (ieltsData.length) {
+    const labels = ieltsData.map(d => d.date);
+    const vals = ieltsData.map(d => d.band);
+    drawLineChart('ieltsCanvas', labels, vals, 9, '#6366f1', null);
+    const latest = vals[vals.length - 1];
+    const change = vals.length > 1 ? (vals[vals.length-1] - vals[0]).toFixed(1) : null;
+    document.getElementById('ieltsLatest').innerHTML =
+      `<div class="text-lg font-black text-white">Band ${latest}</div>` +
+      (change !== null ? `<div class="text-xs ${change >= 0 ? 'text-green-400' : 'text-red-400'}">${change >= 0 ? '+' : ''}${change}</div>` : '');
+  } else {
+    document.getElementById('ieltsEmpty').classList.remove('hidden');
+  }
+
+  // CEFR
+  if (cefrData.length) {
+    const labels = cefrData.map(d => d.date);
+    const vals = cefrData.map(d => d.score);
+    drawLineChart('cefrCanvas', labels, vals, 75, '#10b981', null);
+    const latest = cefrData[cefrData.length - 1];
+    const change = vals.length > 1 ? vals[vals.length-1] - vals[0] : null;
+    document.getElementById('cefrLatest').innerHTML =
+      `<div class="text-lg font-black text-white">${latest.level}</div>` +
+      `<div class="text-xs text-slate-400">${latest.score}/75</div>` +
+      (change !== null ? `<div class="text-xs ${change >= 0 ? 'text-green-400' : 'text-red-400'}">${change >= 0 ? '+' : ''}${change} pts</div>` : '');
+  } else {
+    document.getElementById('cefrEmpty').classList.remove('hidden');
+  }
+
+  // Practice
+  if (practiceData.length) {
+    const labels = practiceData.map(d => d.date);
+    const vals = practiceData.map(d => d.score);
+    drawLineChart('practiceCanvas', labels, vals, 100, '#f59e0b', null);
+    const latest = vals[vals.length - 1];
+    document.getElementById('practiceLatest').innerHTML =
+      `<div class="text-lg font-black text-white">${latest}%</div>`;
+  }
+
+  // Tips
+  buildTips();
+});
+
+function buildTips() {
+  const tips = [];
+  if (!ieltsData.length) tips.push('Take an IELTS Mock to measure your speaking level.');
+  if (!cefrData.length) tips.push('Try a CEFR Mock to find your English proficiency level.');
+  if (ieltsData.length >= 2) {
+    const change = ieltsData[ieltsData.length-1].band - ieltsData[0].band;
+    if (change < 0) tips.push('Your IELTS score dropped. Try AI Speaking Practice to improve fluency.');
+    else if (change > 0) tips.push('Your IELTS score improved! Keep up the good work.');
+  }
+  if (cefrData.length >= 2) {
+    const change = cefrData[cefrData.length-1].score - cefrData[0].score;
+    if (change < 0) tips.push('CEFR score dropped. Focus on vocabulary and grammar practice.');
+  }
+  if (tips.length === 0) {
+    tips.push('Practice speaking every day for best results.');
+    tips.push('Use AI Speaking to get instant feedback on your English.');
+  }
+  const list = document.getElementById('tipsList');
+  list.innerHTML = tips.map(t =>
+    `<div class="flex items-start gap-2"><span class="text-brand mt-0.5 flex-shrink-0">•</span><span class="text-sm text-slate-300">${t}</span></div>`
+  ).join('');
+}
+
+// ── AI Analysis ─────────────────────────────────────────────
+async function loadAnalysis() {
+  const btn = document.getElementById('analysisBtn');
+  const content = document.getElementById('analysisContent');
+  btn.textContent = '⏳ Analyzing...';
+  btn.disabled = true;
+  try {
+    const r = await fetch('/webapp/progress/problems/', { credentials: 'same-origin' });
+    const d = await r.json();
+    if (d.ok) {
+      const a = d.analysis;
+      btn.classList.add('hidden');
+      content.classList.remove('hidden');
+      content.innerHTML = `
+        ${(a.problems||[]).map((p, i) => `
+          <div class="bg-dark-800 rounded-xl p-3" style="background:#242430">
+            <div class="text-sm font-semibold text-white mb-1">${i+1}. ${p}</div>
+            ${a.exercises && a.exercises[i] ? `<div class="text-xs text-slate-400">💡 ${a.exercises[i]}</div>` : ''}
+          </div>
+        `).join('')}
+        ${a.timeline ? `<div class="text-xs text-slate-400 text-center pt-1">⏱ ${a.timeline}</div>` : ''}
+      `;
+    } else {
+      btn.textContent = '🔍 Analyze My Weaknesses';
+      btn.disabled = false;
+      showToast(d.error || 'Error', 'error');
+    }
+  } catch {
+    btn.textContent = '🔍 Analyze My Weaknesses';
+    btn.disabled = false;
+    showToast('Network error', 'error');
+  }
+}
+</script>
+{% endblock %}

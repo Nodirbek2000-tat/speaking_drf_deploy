@@ -1,0 +1,731 @@
+{% extends 'webapp/base.html' %}
+{% block title %}Speaking — Speaking Bot{% endblock %}
+
+{% block content %}
+<div class="safe-bottom overflow-y-auto" id="mainContent">
+  <!-- Header -->
+  <div class="safe-top px-5 pb-2 flex items-center justify-between">
+    <div>
+      <h1 class="text-xl font-bold text-white">Speaking Practice</h1>
+      <p class="text-xs text-slate-400">
+        {% if is_premium %}
+        Unlimited calls · Premium
+        {% else %}
+        {{ free_calls_left }} free call{{ free_calls_left|pluralize }} remaining
+        {% endif %}
+      </p>
+    </div>
+    {% if is_premium %}
+    <div class="badge-premium">👑</div>
+    {% else %}
+    <a href="/webapp/premium/" class="text-xs font-semibold text-gold border border-gold/30 rounded-lg px-3 py-1.5">Go Premium</a>
+    {% endif %}
+  </div>
+
+  <div class="px-4 space-y-4 pb-4">
+    <!-- Start Conversation Button -->
+    <button onclick="showConversationOptions()" class="btn-primary flex items-center justify-center gap-2" {% if not can_call %}disabled style="opacity:0.5"{% endif %}>
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8h2a2 2 0 012 2v6a2 2 0 01-2 2h-2v4l-4-4H9a1.994 1.994 0 01-1.414-.586m0 0L11 14h4a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2v4l.586-.586z"/></svg>
+      Start Conversation
+    </button>
+
+    {% if not can_call %}
+    <div class="card p-4 border border-gold/20 bg-gold/5">
+      <div class="flex items-center gap-3">
+        <span class="text-2xl">⚠️</span>
+        <div>
+          <div class="text-sm font-semibold text-gold">Free calls used up</div>
+          <div class="text-xs text-slate-400">Upgrade to Premium for unlimited calls</div>
+        </div>
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- Recent Conversations -->
+    {% if convos %}
+    <div>
+      <p class="section-title">Recent Conversations</p>
+      <div class="card overflow-hidden">
+        {% for c in convos %}
+        <div class="flex items-center gap-3 p-4 border-b border-white/5 last:border-0">
+          <div class="w-10 h-10 rounded-full flex-shrink-0 flex items-center justify-center font-bold text-sm
+            {% if c.partner_type == 'ai' %}bg-brand/20 text-brand{% else %}bg-gradient-to-br from-slate-600 to-slate-700 text-white{% endif %}">
+            {% if c.partner_type == 'ai' %}AI{% else %}{{ c.partner_name|first|upper }}{% endif %}
+          </div>
+          <div class="flex-1 min-w-0">
+            <div class="text-sm font-medium text-white truncate">{{ c.partner_name }}</div>
+            <div class="text-xs text-slate-500 flex items-center gap-1.5">
+              <span>{{ c.date|timesince }} ago</span>
+              {% if c.duration != '0:00' %}<span>·</span><span>{{ c.duration }}</span>{% endif %}
+            </div>
+          </div>
+          <div class="flex flex-col items-end gap-1">
+            {% if c.status == 'ended' and not c.has_rated and c.partner_type == 'human' %}
+            <button onclick="openRating({{ c.room_id }})" class="text-xs text-gold border border-gold/30 rounded-lg px-2 py-1 active:scale-95 transition-transform">Rate</button>
+            {% elif c.status == 'active' %}
+            <span class="text-xs text-success font-medium">Active</span>
+            {% endif %}
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% else %}
+    <div class="flex flex-col items-center justify-center py-16 text-center">
+      <div class="text-6xl mb-4">🎤</div>
+      <p class="text-lg font-semibold text-white mb-2">No conversations yet</p>
+      <p class="text-sm text-slate-400">Start your first speaking session!</p>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Hidden audio element for remote stream -->
+<audio id="remoteAudio" autoplay playsinline></audio>
+
+<!-- ══════════════════════════════════════════════
+     MODAL: Conversation Options
+═══════════════════════════════════════════════ -->
+<div id="optionsModal" class="modal-overlay hidden" onclick="if(event.target===this)closeOptions()">
+  <div class="modal-sheet slide-up">
+    <div class="modal-handle"></div>
+    <h2 class="text-lg font-bold text-white mb-5">Start a Conversation</h2>
+
+    <!-- Partner Type -->
+    <p class="section-title">Talk with</p>
+    <div class="grid grid-cols-2 gap-2 mb-4">
+      <button class="option-btn selected" onclick="selectPartner(this,'male')" data-val="male">
+        <span class="text-xl">👨</span>
+        <div><div class="text-sm font-semibold">Male</div><div class="text-xs text-slate-400">Men</div></div>
+      </button>
+      <button class="option-btn" onclick="selectPartner(this,'female')" data-val="female">
+        <span class="text-xl">👩</span>
+        <div><div class="text-sm font-semibold">Female</div><div class="text-xs text-slate-400">Women</div></div>
+      </button>
+      <button class="option-btn" onclick="selectPartner(this,'any')" data-val="any">
+        <span class="text-xl">🌍</span>
+        <div><div class="text-sm font-semibold">Around the World</div><div class="text-xs text-slate-400">Anyone</div></div>
+      </button>
+      <button class="option-btn" onclick="selectPartner(this,'ai')" data-val="ai">
+        <span class="text-xl">🤖</span>
+        <div><div class="text-sm font-semibold">AI Partner</div><div class="text-xs text-slate-400">Alex Coach</div></div>
+      </button>
+    </div>
+
+    <!-- Level -->
+    <p class="section-title">Your Level</p>
+    <div id="levelSection" class="grid grid-cols-2 gap-2 mb-6">
+      <button class="option-btn selected" onclick="selectLevel(this,'beginner')" data-val="beginner">
+        <span class="text-xl">🌱</span>
+        <div><div class="text-sm font-semibold">Beginner</div><div class="text-xs text-slate-400">A1 – A2</div></div>
+      </button>
+      <button class="option-btn" onclick="selectLevel(this,'intermediate')" data-val="intermediate">
+        <span class="text-xl">📈</span>
+        <div><div class="text-sm font-semibold">Intermediate</div><div class="text-xs text-slate-400">B1 – B2</div></div>
+      </button>
+      <button class="option-btn" onclick="selectLevel(this,'advanced')" data-val="advanced">
+        <span class="text-xl">🚀</span>
+        <div><div class="text-sm font-semibold">Advanced</div><div class="text-xs text-slate-400">C1 – C2</div></div>
+      </button>
+      <button class="option-btn" onclick="selectLevel(this,'any')" data-val="any">
+        <span class="text-xl">♾️</span>
+        <div><div class="text-sm font-semibold">Every Level</div><div class="text-xs text-slate-400">All levels</div></div>
+      </button>
+    </div>
+
+    <button onclick="startSearch()" class="btn-primary flex items-center justify-center gap-2">
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+      Find Speaking Partner
+    </button>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════
+     PANEL: Searching
+═══════════════════════════════════════════════ -->
+<div id="searchingPanel" class="hidden fixed inset-0 z-[200] flex flex-col items-center justify-center" style="background:#0f0f13">
+  <div class="text-center px-8">
+    <!-- Spinning avatar -->
+    <div class="relative w-36 h-36 mx-auto mb-8">
+      <svg class="absolute inset-0 w-full h-full spin" viewBox="0 0 144 144" fill="none">
+        <circle cx="72" cy="72" r="66" stroke="#242430" stroke-width="4"/>
+        <circle cx="72" cy="72" r="66" stroke="#6366f1" stroke-width="4"
+          stroke-linecap="round"
+          stroke-dasharray="120 300"
+          stroke-dashoffset="0"/>
+      </svg>
+      <svg class="absolute inset-0 w-full h-full" style="animation:spin 2.5s linear infinite reverse" viewBox="0 0 144 144" fill="none">
+        <circle cx="72" cy="72" r="54" stroke="#818cf8" stroke-width="2"
+          stroke-linecap="round"
+          stroke-dasharray="60 280"
+          stroke-dashoffset="40" opacity="0.4"/>
+      </svg>
+      <div class="absolute inset-5 rounded-full bg-gradient-to-br from-brand/30 to-purple-800/30 border border-brand/20 flex items-center justify-center">
+        <svg class="w-10 h-10 text-brand" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/>
+        </svg>
+      </div>
+    </div>
+    <h2 class="text-xl font-bold text-white mb-2">Finding Partner...</h2>
+    <p class="text-sm text-slate-400 mb-2">Looking for a speaking partner for you</p>
+    <div class="flex justify-center gap-1.5 mb-10">
+      <div class="w-1.5 h-1.5 rounded-full bg-brand" style="animation:pulseDot 1.2s ease-in-out infinite;animation-delay:0s"></div>
+      <div class="w-1.5 h-1.5 rounded-full bg-brand" style="animation:pulseDot 1.2s ease-in-out infinite;animation-delay:0.2s"></div>
+      <div class="w-1.5 h-1.5 rounded-full bg-brand" style="animation:pulseDot 1.2s ease-in-out infinite;animation-delay:0.4s"></div>
+    </div>
+    <button onclick="cancelSearch()" class="btn-secondary" style="width:auto;padding:12px 36px">Cancel</button>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════
+     PANEL: Connecting (partner topilganda)
+═══════════════════════════════════════════════ -->
+<div id="connectingPanel" class="hidden fixed inset-0 z-[210] flex flex-col items-center justify-center" style="background:#0f0f13">
+  <div class="text-center px-8">
+    <div class="w-24 h-24 rounded-full bg-gradient-to-br from-brand to-purple-600 flex items-center justify-center text-4xl font-bold text-white mx-auto mb-6" id="connectingAvatar">P</div>
+    <h2 class="text-xl font-bold text-white mb-2">Connecting...</h2>
+    <p id="connectingName" class="text-sm text-slate-400 mb-6">Partner found!</p>
+    <div class="flex justify-center gap-1.5">
+      <div class="w-2 h-2 rounded-full bg-success" style="animation:pulseDot 1s ease-in-out infinite;animation-delay:0s"></div>
+      <div class="w-2 h-2 rounded-full bg-success" style="animation:pulseDot 1s ease-in-out infinite;animation-delay:0.15s"></div>
+      <div class="w-2 h-2 rounded-full bg-success" style="animation:pulseDot 1s ease-in-out infinite;animation-delay:0.3s"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════
+     PANEL: Active Call
+═══════════════════════════════════════════════ -->
+<div id="callPanel" class="hidden fixed inset-0 z-[200] flex flex-col" style="background:#0f0f13">
+  <div class="safe-top px-5 py-2 flex items-center justify-between">
+    <div id="callStatus" class="flex items-center gap-2">
+      <div class="w-2 h-2 rounded-full bg-success pulse-dot"></div>
+      <span class="text-xs font-medium text-success">Connected</span>
+    </div>
+    <div id="callTimer" class="font-mono text-lg font-bold text-white">0:00</div>
+  </div>
+
+  <div class="flex-1 flex flex-col items-center justify-center px-8 text-center">
+    <div id="callAvatar" class="w-24 h-24 rounded-full bg-gradient-to-br from-brand to-purple-600 flex items-center justify-center text-4xl font-bold text-white mb-4">U</div>
+    <h2 id="callPartnerName" class="text-2xl font-bold text-white mb-1">Partner</h2>
+    <p id="callPartnerUsername" class="text-sm text-slate-400 mb-6">@username</p>
+
+    <div id="connectionError" class="hidden bg-danger/10 border border-danger/30 rounded-xl px-4 py-2 flex items-center gap-2">
+      <span class="text-sm text-danger">⚠️ Connection issue — trying to reconnect...</span>
+    </div>
+  </div>
+
+  <div class="pb-safe px-8 pb-12" style="padding-bottom: calc(48px + env(safe-area-inset-bottom,0px))">
+    <div class="flex items-center justify-center gap-8">
+      <div class="flex flex-col items-center gap-2">
+        <button id="micBtn" onclick="toggleMic()" class="w-16 h-16 rounded-full bg-dark-800 border border-white/10 flex items-center justify-center transition-all active:scale-95" style="background:#242430">
+          <svg id="micOnIcon" class="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"/></svg>
+          <svg id="micOffIcon" class="w-7 h-7 text-slate-400 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" clip-rule="evenodd"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2"/></svg>
+        </button>
+        <span class="text-xs text-slate-400" id="micLabel">Mic On</span>
+      </div>
+
+      <div class="flex flex-col items-center gap-2">
+        <button onclick="endCall()" class="w-20 h-20 rounded-full bg-danger flex items-center justify-center transition-all active:scale-95 shadow-lg shadow-danger/30">
+          <svg class="w-8 h-8 text-white" fill="currentColor" viewBox="0 0 24 24"><path d="M20.01 15.38c-1.23 0-2.42-.2-3.53-.56a.977.977 0 00-1.01.24l-1.57 1.97c-2.83-1.35-5.48-3.9-6.89-6.83l1.95-1.66c.27-.28.35-.67.24-1.02-.37-1.11-.56-2.3-.56-3.53 0-.54-.45-.99-.99-.99H4.19C3.65 3 3 3.24 3 3.99 3 13.28 10.73 21 20.01 21c.71 0 .99-.63.99-1.18v-3.45c0-.54-.45-.99-.99-.99z"/></svg>
+        </button>
+        <span class="text-xs text-danger font-semibold">End Call</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════
+     PANEL: AI Call
+═══════════════════════════════════════════════ -->
+<div id="aiCallPanel" class="hidden fixed inset-0 z-[200] flex flex-col" style="background:#0f0f13">
+  <div class="safe-top px-5 py-2 flex items-center justify-between">
+    <div class="flex items-center gap-2">
+      <div class="w-2 h-2 rounded-full bg-brand pulse-dot"></div>
+      <span class="text-xs font-medium text-brand">AI Speaking Practice</span>
+    </div>
+    <div id="aiTimer" class="font-mono text-lg font-bold text-white">0:00</div>
+  </div>
+
+  <div class="flex-1 flex flex-col items-center justify-center px-6">
+    <div class="w-20 h-20 rounded-full bg-gradient-to-br from-brand to-purple-600 flex items-center justify-center text-4xl mb-4">🤖</div>
+    <h2 class="text-xl font-bold text-white mb-1">Alex</h2>
+    <p class="text-sm text-slate-400 mb-8">AI Speaking Coach</p>
+
+    <div id="aiTranscript" class="w-full max-w-sm bg-dark-800 rounded-2xl p-4 min-h-24 max-h-48 overflow-y-auto space-y-2" style="background:#1a1a22">
+      <p class="text-sm text-slate-500 text-center">AI will respond when you speak...</p>
+    </div>
+  </div>
+
+  <div class="px-8 pb-12" style="padding-bottom: calc(48px + env(safe-area-inset-bottom,0px))">
+    <div class="flex items-center justify-center gap-8">
+      <div class="flex flex-col items-center gap-2">
+        <button id="aiMicBtn"
+          onmousedown="startAIRecording(event)" ontouchstart="startAIRecording(event)"
+          onmouseup="stopAIRecording(event)" ontouchend="stopAIRecording(event)"
+          class="w-16 h-16 rounded-full border-2 border-white/10 flex items-center justify-center transition-all"
+          style="background:#242430">
+          <svg class="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"/></svg>
+        </button>
+        <span class="text-xs text-slate-400" id="aiMicLabel">Hold to Talk</span>
+      </div>
+
+      <div class="flex flex-col items-center gap-2">
+        <button onclick="endAICall()" class="w-20 h-20 rounded-full bg-danger flex items-center justify-center active:scale-95 transition-transform shadow-lg shadow-danger/30">
+          <svg class="w-8 h-8 text-white" fill="currentColor" viewBox="0 0 24 24"><path d="M20.01 15.38c-1.23 0-2.42-.2-3.53-.56a.977.977 0 00-1.01.24l-1.57 1.97c-2.83-1.35-5.48-3.9-6.89-6.83l1.95-1.66c.27-.28.35-.67.24-1.02-.37-1.11-.56-2.3-.56-3.53 0-.54-.45-.99-.99-.99H4.19C3.65 3 3 3.24 3 3.99 3 13.28 10.73 21 20.01 21c.71 0 .99-.63.99-1.18v-3.45c0-.54-.45-.99-.99-.99z"/></svg>
+        </button>
+        <span class="text-xs text-danger font-semibold">End</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════
+     MODAL: Rate Call
+═══════════════════════════════════════════════ -->
+<div id="ratingModal" class="modal-overlay hidden">
+  <div class="modal-sheet slide-up">
+    <div class="modal-handle"></div>
+    <h2 class="text-lg font-bold text-white mb-2">Rate this conversation</h2>
+    <p class="text-sm text-slate-400 mb-6">How was your speaking session?</p>
+
+    <div class="flex justify-center gap-3 mb-6" id="starRow">
+      {% for i in "12345" %}
+      <button onclick="setRating({{ forloop.counter }})" class="text-5xl transition-transform active:scale-90" data-star="{{ forloop.counter }}">☆</button>
+      {% endfor %}
+    </div>
+
+    <textarea id="ratingComment" placeholder="Add a comment (optional)" rows="3"
+      class="w-full bg-dark-700 border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-brand resize-none mb-4"
+      style="background:#242430"></textarea>
+
+    <button onclick="submitRating()" class="btn-primary flex items-center justify-center gap-2">
+      Submit Rating
+    </button>
+    <button onclick="skipRating()" class="btn-secondary mt-2">Skip</button>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+// ── State ─────────────────────────────
+const wsProto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+let genderFilter = 'male', level = 'beginner', partnerType = 'male';
+let matchSocket = null, callSocket = null, peerConn = null;
+let localStream = null, remoteStream = null;
+let micEnabled = true;
+let callIntervalId = null, callSecs = 0;
+let aiIntervalId = null, aiSecs = 0;
+let aiSocket = null;
+let mediaRecorder = null, audioChunks = [];
+let currentRoomId = null, currentRole = null;
+let ratingRoomId = null, selectedRating = 0;
+let isRecording = false;
+
+// ── Navigation ────────────────────────
+document.querySelectorAll('.nav-item').forEach(el => {
+  if (el.getAttribute('href') === '/webapp/speaking/') el.classList.add('active');
+});
+
+// ── Partner / Level select ────────────
+function selectPartner(btn, val) {
+  document.querySelectorAll('#optionsModal .option-btn[data-val]').forEach(b => {
+    if (['male','female','any','ai'].includes(b.dataset.val)) b.classList.remove('selected');
+  });
+  btn.classList.add('selected');
+  partnerType = val;
+  if (['male', 'female', 'any'].includes(val)) genderFilter = val;
+
+  const ls = document.getElementById('levelSection');
+  if (ls) ls.style.opacity = val === 'ai' ? '0.4' : '1';
+}
+
+function selectLevel(btn, val) {
+  document.querySelectorAll('#optionsModal .option-btn[data-val]').forEach(b => {
+    if (['beginner','intermediate','advanced','any'].includes(b.dataset.val)) b.classList.remove('selected');
+  });
+  btn.classList.add('selected');
+  level = val;
+}
+
+function showConversationOptions() {
+  document.getElementById('optionsModal').classList.remove('hidden');
+}
+function closeOptions() {
+  document.getElementById('optionsModal').classList.add('hidden');
+}
+
+// ── Start Search ──────────────────────
+async function startSearch() {
+  closeOptions();
+
+  if (partnerType === 'ai') {
+    startAISession();
+    return;
+  }
+
+  // Mic ruxsat so'rash
+  try {
+    localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+  } catch (e) {
+    showToast('Microphone permission denied. Please allow microphone access.', 'error');
+    return;
+  }
+
+  window._inCall = true;
+  document.getElementById('searchingPanel').classList.remove('hidden');
+
+  // ✅ TOKEN YO'Q — to'g'ridan-to'g'ri session cookie bilan ulanadi
+  matchSocket = new WebSocket(`${wsProto}//${location.host}/ws/voice-match/`);
+
+  matchSocket.onopen = () => {
+    matchSocket.send(JSON.stringify({ type: 'search', gender_filter: genderFilter, level }));
+  };
+
+  matchSocket.onmessage = (e) => {
+    const d = JSON.parse(e.data);
+    if (d.type === 'matched') {
+      currentRoomId = d.room_id;
+      currentRole = d.role;
+      matchSocket.close();
+      matchSocket = null;
+      // Avval "Connecting..." panelini ko'rsat
+      showConnectingPanel(d.partner);
+      // Keyin WebRTC ulan
+      setupWebRTC(d.role, d.room_id, d.partner);
+    }
+  };
+
+  matchSocket.onerror = () => {
+    showToast('Connection error. Please try again.', 'error');
+    cancelSearch();
+  };
+
+  matchSocket.onclose = (e) => {
+    if (e.code === 4001) {
+      showToast('Please log in again', 'error');
+      window.location.href = '/webapp/';
+    }
+  };
+}
+
+function cancelSearch() {
+  if (matchSocket) {
+    matchSocket.send(JSON.stringify({ type: 'cancel' }));
+    matchSocket.close();
+    matchSocket = null;
+  }
+  if (localStream) { localStream.getTracks().forEach(t => t.stop()); localStream = null; }
+  window._inCall = false;
+  document.getElementById('searchingPanel').classList.add('hidden');
+}
+
+// ── Connecting Panel ──────────────────
+function showConnectingPanel(partner) {
+  document.getElementById('searchingPanel').classList.add('hidden');
+  const panel = document.getElementById('connectingPanel');
+  panel.classList.remove('hidden');
+  document.getElementById('connectingAvatar').textContent = (partner.name || 'P')[0].toUpperCase();
+  document.getElementById('connectingName').textContent = 'Connecting with ' + (partner.name || 'Partner') + '...';
+}
+
+// ── Show Call Panel ───────────────────
+function showCallPanel(partner) {
+  document.getElementById('connectingPanel').classList.add('hidden');
+  document.getElementById('searchingPanel').classList.add('hidden');
+  const panel = document.getElementById('callPanel');
+  panel.classList.remove('hidden');
+  document.getElementById('callPartnerName').textContent = partner.name || 'Partner';
+  document.getElementById('callPartnerUsername').textContent = partner.username ? `@${partner.username}` : '';
+  document.getElementById('callAvatar').textContent = (partner.name || 'P')[0].toUpperCase();
+  startCallTimer();
+}
+
+function startCallTimer() {
+  callSecs = 0;
+  clearInterval(callIntervalId);
+  callIntervalId = setInterval(() => {
+    callSecs++;
+    document.getElementById('callTimer').textContent = formatTime(callSecs);
+  }, 1000);
+}
+
+// ── WebRTC Setup ──────────────────────
+async function setupWebRTC(role, roomId, partner) {
+  const ice = {
+    iceServers: [
+      { urls: 'stun:stun.l.google.com:19302' },
+      { urls: 'stun:stun1.l.google.com:19302' }
+    ]
+  };
+  peerConn = new RTCPeerConnection(ice);
+
+  localStream.getTracks().forEach(t => peerConn.addTrack(t, localStream));
+
+  remoteStream = new MediaStream();
+  peerConn.ontrack = e => {
+    e.streams[0].getTracks().forEach(t => remoteStream.addTrack(t));
+    document.getElementById('remoteAudio').srcObject = remoteStream;
+  };
+
+  peerConn.onicecandidate = e => {
+    if (e.candidate && callSocket && callSocket.readyState === WebSocket.OPEN) {
+      callSocket.send(JSON.stringify({ type: 'ice_candidate', candidate: e.candidate.toJSON() }));
+    }
+  };
+
+  peerConn.onconnectionstatechange = () => {
+    if (['failed', 'disconnected'].includes(peerConn.connectionState)) {
+      document.getElementById('connectionError').classList.remove('hidden');
+    } else if (peerConn.connectionState === 'connected') {
+      document.getElementById('connectionError').classList.add('hidden');
+      // Connected! "Connecting" panelini yashir, call panelini ko'rsat
+      showCallPanel(partner);
+    }
+  };
+
+  // ✅ TOKEN YO'Q — session cookie bilan ulanadi
+  callSocket = new WebSocket(`${wsProto}//${location.host}/ws/voice-call/${roomId}/`);
+
+  callSocket.onopen = async () => {
+    if (role === 'caller') {
+      const offer = await peerConn.createOffer();
+      await peerConn.setLocalDescription(offer);
+      callSocket.send(JSON.stringify({ type: 'offer', sdp: offer }));
+    }
+  };
+
+  callSocket.onmessage = async (e) => {
+    const msg = JSON.parse(e.data);
+    if (msg.type === 'offer' && role === 'callee') {
+      await peerConn.setRemoteDescription(new RTCSessionDescription(msg.sdp));
+      const ans = await peerConn.createAnswer();
+      await peerConn.setLocalDescription(ans);
+      callSocket.send(JSON.stringify({ type: 'answer', sdp: ans }));
+      showCallPanel(partner);
+    } else if (msg.type === 'answer' && role === 'caller') {
+      await peerConn.setRemoteDescription(new RTCSessionDescription(msg.sdp));
+    } else if (msg.type === 'ice_candidate' && msg.candidate) {
+      try { await peerConn.addIceCandidate(new RTCIceCandidate(msg.candidate)); } catch {}
+    } else if (msg.type === 'call_ended') {
+      endCall(false);
+      showToast('Partner ended the call', 'info');
+    }
+  };
+
+  callSocket.onerror = () => {
+    showToast('Call connection error', 'error');
+    endCall(false);
+  };
+}
+
+// ── End Call ──────────────────────────
+function endCall(showRating = true) {
+  clearInterval(callIntervalId);
+  window._inCall = false;
+
+  if (callSocket) {
+    try { callSocket.send(JSON.stringify({ type: 'end_call' })); } catch {}
+    callSocket.close();
+    callSocket = null;
+  }
+  if (peerConn) { peerConn.close(); peerConn = null; }
+  if (localStream) { localStream.getTracks().forEach(t => t.stop()); localStream = null; }
+
+  document.getElementById('callPanel').classList.add('hidden');
+  document.getElementById('connectingPanel').classList.add('hidden');
+
+  if (showRating && currentRoomId) {
+    openRating(currentRoomId);
+  } else {
+    location.reload();
+  }
+}
+
+// ── Mic Toggle ────────────────────────
+function toggleMic() {
+  micEnabled = !micEnabled;
+  if (localStream) localStream.getAudioTracks().forEach(t => t.enabled = micEnabled);
+  document.getElementById('micOnIcon').classList.toggle('hidden', !micEnabled);
+  document.getElementById('micOffIcon').classList.toggle('hidden', micEnabled);
+  document.getElementById('micLabel').textContent = micEnabled ? 'Mic On' : 'Mic Off';
+  document.getElementById('micBtn').style.background = micEnabled ? '#242430' : 'rgba(239,68,68,0.2)';
+}
+
+// ── AI Session ────────────────────────
+async function startAISession() {
+  window._inCall = true;
+  document.getElementById('aiCallPanel').classList.remove('hidden');
+  aiSecs = 0;
+  clearInterval(aiIntervalId);
+  aiIntervalId = setInterval(() => {
+    aiSecs++;
+    document.getElementById('aiTimer').textContent = formatTime(aiSecs);
+  }, 1000);
+
+  // ✅ TOKEN YO'Q — session cookie bilan ulanadi
+  aiSocket = new WebSocket(`${wsProto}//${location.host}/ws/ai-call/`);
+  aiSocket.binaryType = 'arraybuffer';
+
+  aiSocket.onopen = () => {
+    addTranscript('System', 'Connected! Alex is ready...');
+  };
+
+  aiSocket.onerror = () => {
+    showToast('Connection error. Please try again.', 'error');
+    endAICall();
+  };
+
+  aiSocket.onclose = (e) => {
+    if (e.code === 4001) {
+      showToast('Please log in again', 'error');
+      window.location.href = '/webapp/';
+    } else if (e.code !== 1000 && window._inCall) {
+      showToast('Connection lost.', 'error');
+    }
+  };
+
+  aiSocket.onmessage = async (e) => {
+    if (typeof e.data === 'string') {
+      const d = JSON.parse(e.data);
+      if (d.type === 'ai_text') addTranscript('Alex', d.text);
+      else if (d.type === 'user_transcript') addTranscript('You', d.text);
+      else if (d.type === 'ended') endAICall();
+      else if (d.type === 'error') showToast(d.text || 'Server error', 'error');
+    } else {
+      // Audio (arraybuffer)
+      try {
+        const blob = new Blob([e.data], { type: 'audio/mpeg' });
+        const url = URL.createObjectURL(blob);
+        const audio = new Audio(url);
+        audio.onended = () => URL.revokeObjectURL(url);
+        await audio.play();
+      } catch {}
+    }
+  };
+}
+
+function addTranscript(speaker, text) {
+  const div = document.getElementById('aiTranscript');
+  const placeholder = div.querySelector('p');
+  if (placeholder) placeholder.remove();
+
+  const el = document.createElement('div');
+  el.className = `text-sm mb-1 ${speaker === 'Alex' ? 'text-brand' : speaker === 'System' ? 'text-slate-500' : 'text-white'}`;
+
+  // ✅ XSS xavfsiz
+  const nameSpan = document.createElement('span');
+  nameSpan.className = 'font-semibold';
+  nameSpan.textContent = speaker + ': ';
+  el.appendChild(nameSpan);
+  el.appendChild(document.createTextNode(text));
+
+  div.appendChild(el);
+  div.scrollTop = div.scrollHeight;
+}
+
+async function startAIRecording(e) {
+  if (e) e.preventDefault();
+  if (isRecording || !aiSocket || aiSocket.readyState !== WebSocket.OPEN) return;
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    audioChunks = [];
+    const mimeType = MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : 'audio/mp4';
+    mediaRecorder = new MediaRecorder(stream, { mimeType });
+    mediaRecorder.ondataavailable = ev => { if (ev.data.size > 0) audioChunks.push(ev.data); };
+    mediaRecorder.onstop = () => {
+      const blob = new Blob(audioChunks, { type: mimeType });
+      if (blob.size > 500 && aiSocket && aiSocket.readyState === WebSocket.OPEN) {
+        aiSocket.send(blob);
+      }
+      stream.getTracks().forEach(t => t.stop());
+    };
+    mediaRecorder.start();
+    isRecording = true;
+    document.getElementById('aiMicBtn').style.background = 'rgba(239,68,68,0.3)';
+    document.getElementById('aiMicBtn').style.borderColor = '#ef4444';
+    document.getElementById('aiMicLabel').textContent = '🔴 Recording...';
+  } catch {
+    showToast('Microphone permission denied', 'error');
+  }
+}
+
+function stopAIRecording(e) {
+  if (e) e.preventDefault();
+  if (!isRecording || !mediaRecorder) return;
+  mediaRecorder.stop();
+  isRecording = false;
+  document.getElementById('aiMicBtn').style.background = '#242430';
+  document.getElementById('aiMicBtn').style.borderColor = 'rgba(255,255,255,0.1)';
+  document.getElementById('aiMicLabel').textContent = 'Hold to Talk';
+}
+
+function endAICall() {
+  clearInterval(aiIntervalId);
+  window._inCall = false;
+  if (aiSocket) {
+    try { aiSocket.send(JSON.stringify({ type: 'end' })); } catch {}
+    aiSocket.close();
+    aiSocket = null;
+  }
+  document.getElementById('aiCallPanel').classList.add('hidden');
+  location.reload();
+}
+
+// ── Rating ────────────────────────────
+function openRating(roomId) {
+  ratingRoomId = roomId;
+  selectedRating = 0;
+  document.querySelectorAll('#starRow button').forEach(b => {
+    b.textContent = '☆';
+    b.style.color = '#374151';
+  });
+  document.getElementById('ratingComment').value = '';
+  document.getElementById('ratingModal').classList.remove('hidden');
+}
+
+function setRating(n) {
+  selectedRating = n;
+  document.querySelectorAll('#starRow button').forEach((b, i) => {
+    b.textContent = i < n ? '★' : '☆';
+    b.style.color = i < n ? '#f59e0b' : '#374151';
+  });
+}
+
+async function submitRating() {
+  if (!selectedRating) { showToast('Please select a rating', 'error'); return; }
+  const comment = document.getElementById('ratingComment').value.trim();
+  try {
+    const r = await fetch(`/webapp/speaking/rate/${ratingRoomId}/`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrf() },
+      body: JSON.stringify({ rating: selectedRating, comment }),
+      credentials: 'same-origin',
+    });
+    const d = await r.json();
+    if (d.ok) {
+      showToast('Rating submitted!', 'success');
+      document.getElementById('ratingModal').classList.add('hidden');
+      location.reload();
+    } else {
+      showToast(d.error || 'Error', 'error');
+    }
+  } catch {
+    showToast('Error submitting rating', 'error');
+  }
+}
+
+function skipRating() {
+  document.getElementById('ratingModal').classList.add('hidden');
+  location.reload();
+}
+
+// ── Helper ────────────────────────────
+function formatTime(secs) {
+  const m = Math.floor(secs / 60);
+  const s = secs % 60;
+  return `${m}:${s.toString().padStart(2, '0')}`;
+}
+</script>
+{% endblock %}

@@ -1,0 +1,83 @@
+{% extends "admin/base_site.html" %}
+{% block title %}Broadcast Message{% endblock %}
+
+{% block content %}
+<div style="max-width:600px;margin:0 auto">
+
+  <div style="background:#1e1e2e;border-radius:10px;padding:24px;margin-bottom:20px">
+    <h2 style="color:#cdd6f4;margin:0 0 8px">📢 Broadcast — Mass Message</h2>
+    <p style="color:#a6adc8;margin:0">Telegram ID si bo'lgan <b style="color:#f38ba8">barcha</b> foydalanuvchilarga xabar yuboriladi.</p>
+  </div>
+
+  {% if messages %}
+    {% for msg in messages %}
+      <div style="padding:12px 16px;border-radius:6px;margin-bottom:12px;
+        {% if msg.tags == 'success' %}background:#1e4620;color:#8dce9a;border:1px solid #28a745
+        {% elif msg.tags == 'warning' %}background:#4a3a10;color:#f8bb56;border:1px solid #f59e0b
+        {% else %}background:#4a1818;color:#e06c75;border:1px solid #dc3545{% endif %}">
+        {{ msg }}
+      </div>
+    {% endfor %}
+  {% endif %}
+
+  {% if done %}
+  <div style="background:#181825;border-radius:10px;padding:24px;margin-bottom:20px;text-align:center">
+    <div style="font-size:48px;margin-bottom:12px">✅</div>
+    <div style="color:#cdd6f4;font-size:18px;font-weight:bold;margin-bottom:8px">Yuborish yakunlandi!</div>
+    <div style="color:#a6adc8">
+      <span style="color:#8dce9a;font-weight:bold">{{ sent }}</span> ta muvaffaqiyatli ·
+      <span style="color:#f38ba8;font-weight:bold">{{ failed }}</span> ta xato
+    </div>
+    <div style="margin-top:20px">
+      <a href="" style="background:#6366f1;color:#fff;padding:10px 24px;border-radius:6px;text-decoration:none;font-weight:bold">
+        📢 Yana yuborish
+      </a>
+      &nbsp;
+      <a href="../" style="color:#a6adc8;text-decoration:none;font-size:14px">← Orqaga</a>
+    </div>
+  </div>
+  {% else %}
+  <form method="post" style="background:#181825;border-radius:10px;padding:24px">
+    {% csrf_token %}
+
+    <div style="margin-bottom:20px">
+      <label style="color:#cdd6f4;display:block;margin-bottom:8px;font-weight:bold;font-size:14px">
+        📝 Xabar matni
+        <small style="color:#a6adc8;font-weight:normal">(HTML: &lt;b&gt;, &lt;i&gt;, &lt;code&gt;, &lt;a href&gt;)</small>
+      </label>
+      <textarea
+        name="text"
+        rows="8"
+        required
+        placeholder="Misol:&#10;🎉 &lt;b&gt;Yangilik!&lt;/b&gt;&#10;&#10;Speaking Bot yangilandi! Yangi imkoniyatlar:&#10;✅ Yangi..."
+        style="width:100%;box-sizing:border-box;padding:14px;font-size:14px;
+          background:#1e1e2e;color:#cdd6f4;border:1px solid #313244;
+          border-radius:6px;resize:vertical;font-family:monospace;line-height:1.5"
+      ></textarea>
+    </div>
+
+    <div style="background:#1e2a1e;border:1px solid #28a745;border-radius:8px;padding:12px;margin-bottom:20px">
+      <div style="color:#8dce9a;font-size:13px;font-weight:bold;margin-bottom:6px">⚠️ Diqqat!</div>
+      <div style="color:#a6adc8;font-size:13px;line-height:1.6">
+        Bu xabar <b style="color:#f38ba8">barcha foydalanuvchilarga</b> yuboriladi.<br>
+        Yuborishdan oldin matnni diqqat bilan tekshiring.<br>
+        Bot tomonidan bloklangan userlar statistikaga kirmaydi.
+      </div>
+    </div>
+
+    <div style="display:flex;gap:12px;align-items:center">
+      <button
+        type="submit"
+        onclick="return confirm('Barcha foydalanuvchilarga yuborishni tasdiqlaysizmi?')"
+        style="background:#dc3545;color:#fff;border:none;padding:12px 28px;
+          border-radius:6px;font-size:14px;cursor:pointer;font-weight:bold"
+      >
+        📢 Hammaga yuborish
+      </button>
+      <a href="../" style="color:#a6adc8;text-decoration:none;font-size:14px">← Bekor qilish</a>
+    </div>
+  </form>
+  {% endif %}
+
+</div>
+{% endblock %}

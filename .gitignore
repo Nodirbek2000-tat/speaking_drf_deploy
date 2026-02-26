@@ -1,0 +1,200 @@
+# =====================================================
+# ENVIRONMENT & SECRETS
+# =====================================================
+.env
+.env.*
+.env.local
+.env.development
+.env.production
+.env.staging
+*.env
+secrets.json
+secrets.yaml
+config.local.py
+local_settings.py
+
+# =====================================================
+# PYTHON
+# =====================================================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+pip-log.txt
+pip-delete-this-directory.txt
+
+# =====================================================
+# VIRTUAL ENVIRONMENTS
+# =====================================================
+venv/
+ENV/
+env/
+.venv/
+.ENV/
+env.bak/
+venv.bak/
+pythonenv*/
+.python-version
+
+# =====================================================
+# DJANGO
+# =====================================================
+*.log
+db.sqlite3
+db.sqlite3-journal
+media/
+staticfiles/
+static_collected/
+*.pot
+*.pyc
+celerybeat-schedule
+celerybeat.pid
+
+# =====================================================
+# TESTING & COVERAGE
+# =====================================================
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+pytest_cache/
+
+# =====================================================
+# DOCKER
+# =====================================================
+docker-compose.override.yml
+.docker/
+
+# =====================================================
+# DATABASE
+# =====================================================
+*.sqlite3
+db.sqlite3
+*.db
+*.sql
+!schema.sql
+dump.rdb
+
+# =====================================================
+# CERTBOT / SSL
+# =====================================================
+certbot/
+ssl/
+certs/
+*.pem
+*.key
+*.crt
+*.csr
+
+# =====================================================
+# IDE & EDITORS
+# =====================================================
+.idea/
+.vscode/
+*.swp
+*.swo
+*.swn
+*~
+.project
+.pydevproject
+.settings/
+*.sublime-workspace
+*.sublime-project
+.spyderproject
+.spyproject
+.ropeproject
+*.code-workspace
+
+# =====================================================
+# OS GENERATED
+# =====================================================
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+.AppleDouble
+.LSOverride
+*.lnk
+
+# =====================================================
+# LOGS & TEMP FILES
+# =====================================================
+logs/
+*.log
+*.tmp
+*.temp
+*.bak
+*.backup
+*.old
+tmp/
+temp/
+.cache/
+
+# =====================================================
+# NODE (if using frontend tools)
+# =====================================================
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json
+yarn.lock
+
+# =====================================================
+# UPLOADS & USER DATA
+# =====================================================
+uploads/
+media/uploads/
+user_uploads/
+
+# =====================================================
+# JUPYTER NOTEBOOKS
+# =====================================================
+.ipynb_checkpoints/
+*.ipynb
+
+# =====================================================
+# MISC
+# =====================================================
+*.pid
+*.seed
+*.pid.lock
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.pyre/
+.pytype/
+cython_debug/
+profile_default/
+ipython_config.py
+.aider*
+.claude/
