@@ -1,172 +1,398 @@
 {% extends 'webapp/base.html' %}
-{% block title %}Practice — Speaking Bot{% endblock %}
+{% block title %}Practice{% endblock %}
 
 {% block content %}
-<div class="safe-bottom overflow-y-auto">
+<div id="practice-app" style="padding-bottom:90px;">
+
   <!-- Header -->
-  <div class="safe-top px-5 pb-2">
-    <h1 class="text-xl font-bold text-white">Practice</h1>
-    <p class="text-xs text-slate-400">Choose a scenario to practice</p>
+  <div style="padding:20px 20px 14px; display:flex; align-items:center; justify-content:space-between;">
+    <div>
+      <h1 style="font-size:22px; font-weight:700; color:#fff; margin:0;">Practice</h1>
+      <p style="font-size:13px; color:#9ca3af; margin:4px 0 0;">AI bilan real suhbat amaliyoti</p>
+    </div>
+    <div id="free-badge" style="display:none; background:#1e1e2e; border:1px solid #374151; border-radius:12px; padding:5px 12px; font-size:12px; color:#9ca3af;">
+      <span id="free-text">—</span> free
+    </div>
   </div>
 
-  <div class="px-4 space-y-5 pb-4">
-    {% for category in categories %}
-    {% if category.scenarios.all %}
-    <div>
-      <p class="section-title">{{ category.icon }} {{ category.name }}</p>
-      <div class="space-y-2">
-        {% for scenario in category.scenarios.all %}
-        {% if scenario.is_active %}
-        <button onclick="showScenario({{ scenario.id }})" class="card w-full p-4 flex items-start gap-3 text-left active:scale-98 transition-transform">
-          <div class="flex-1 min-w-0">
-            <div class="flex items-center gap-2 mb-1">
-              <span class="text-sm font-semibold text-white">{{ scenario.title }}</span>
-              <span class="badge-{{ scenario.difficulty }} ml-auto flex-shrink-0">
-                {% if scenario.difficulty == 'easy' %}🟢{% elif scenario.difficulty == 'medium' %}🟡{% else %}🔴{% endif %}
-                {{ scenario.difficulty|title }}
-              </span>
-            </div>
-            <p class="text-xs text-slate-400 line-clamp-2 leading-relaxed">{{ scenario.description }}</p>
-            <div class="flex items-center gap-3 mt-2">
-              <span class="text-xs text-slate-500">⏱ {{ scenario.duration_minutes }} min</span>
-              <span class="text-xs text-slate-600">·</span>
-              <span class="text-xs text-slate-500 italic">AI: {{ scenario.ai_prompt|slice:":50" }}...</span>
-            </div>
-          </div>
-          <svg class="w-4 h-4 text-slate-500 flex-shrink-0 mt-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
-        </button>
-        {% endif %}
-        {% endfor %}
-      </div>
-    </div>
-    {% endif %}
-    {% empty %}
-    <div class="flex flex-col items-center justify-center py-16 text-center">
-      <div class="text-6xl mb-4">📚</div>
-      <p class="text-lg font-semibold text-white mb-2">No scenarios yet</p>
-      <p class="text-sm text-slate-400">Admin will add practice scenarios soon</p>
-    </div>
-    {% endfor %}
+  <!-- Tabs: Real Life / Academic -->
+  <div style="padding:0 16px 12px; display:flex; gap:8px;">
+    <button class="type-tab active" data-type="real_life" onclick="setType('real_life')"
+      style="flex:1; padding:10px; border-radius:12px; border:none; background:#6366f1; color:#fff; font-size:14px; font-weight:600; cursor:pointer; transition:all .2s;">
+      🗣 Real Life
+    </button>
+    <button class="type-tab" data-type="academic" onclick="setType('academic')"
+      style="flex:1; padding:10px; border-radius:12px; border:1px solid #374151; background:#1e1e2e; color:#6b7280; font-size:14px; font-weight:600; cursor:pointer; transition:all .2s;">
+      🎓 Academic
+    </button>
+  </div>
 
-    <!-- Recent Sessions -->
-    {% if recent_sessions %}
-    <div>
-      <p class="section-title">Your Recent Sessions</p>
-      <div class="card overflow-hidden">
-        {% for s in recent_sessions %}
-        <div class="flex items-center gap-3 p-4 border-b border-white/5 last:border-0">
-          <div class="w-10 h-10 rounded-xl bg-brand/10 flex items-center justify-center flex-shrink-0">
-            <span class="text-lg">{{ s.scenario.category.icon }}</span>
-          </div>
-          <div class="flex-1 min-w-0">
-            <div class="text-sm font-medium text-white truncate">{{ s.scenario.title }}</div>
-            <div class="text-xs text-slate-400 flex items-center gap-1.5">
-              <span class="badge-{{ s.scenario.difficulty }}">{{ s.scenario.difficulty|title }}</span>
-              {% if s.overall_score %}<span class="text-slate-600">·</span><span class="text-success">{{ s.overall_score|floatformat:0 }}%</span>{% endif %}
-            </div>
-          </div>
-          <div class="text-xs text-slate-500">{{ s.started_at|timesince }} ago</div>
-        </div>
-        {% endfor %}
+  <!-- Category filter pills -->
+  <div id="cat-pills" style="padding:0 16px 12px; display:flex; gap:8px; overflow-x:auto; scrollbar-width:none; -webkit-overflow-scrolling:touch;">
+  </div>
+
+  <!-- Difficulty filter -->
+  <div style="padding:0 16px 14px; display:flex; gap:8px; overflow-x:auto; scrollbar-width:none;">
+    <button class="diff-tab active" data-diff="all" onclick="setDiff('all')"
+      style="padding:5px 14px; border-radius:20px; border:1px solid #6366f1; background:#6366f1; color:#fff; font-size:12px; cursor:pointer; white-space:nowrap; transition:all .2s;">
+      Barchasi
+    </button>
+    <button class="diff-tab" data-diff="easy" onclick="setDiff('easy')"
+      style="padding:5px 14px; border-radius:20px; border:1px solid #374151; background:transparent; color:#10b981; font-size:12px; cursor:pointer; white-space:nowrap; transition:all .2s;">
+      🟢 Easy
+    </button>
+    <button class="diff-tab" data-diff="medium" onclick="setDiff('medium')"
+      style="padding:5px 14px; border-radius:20px; border:1px solid #374151; background:transparent; color:#f59e0b; font-size:12px; cursor:pointer; white-space:nowrap; transition:all .2s;">
+      🟡 Medium
+    </button>
+    <button class="diff-tab" data-diff="hard" onclick="setDiff('hard')"
+      style="padding:5px 14px; border-radius:20px; border:1px solid #374151; background:transparent; color:#ef4444; font-size:12px; cursor:pointer; white-space:nowrap; transition:all .2s;">
+      🔴 Hard
+    </button>
+  </div>
+
+  <!-- Scenarios -->
+  <div id="scenarios-container" style="padding:0 16px; display:flex; flex-direction:column; gap:10px;">
+    <div style="text-align:center; padding:60px 0; color:#6b7280; font-size:14px;">⏳ Yuklanmoqda...</div>
+  </div>
+
+</div>
+
+<!-- Bottom Sheet overlay -->
+<div id="sheet-overlay" class="hidden"
+  style="position:fixed; inset:0; z-index:200; background:rgba(0,0,0,0.75); transition:opacity .3s;"
+  onclick="closeSheet(event)">
+
+  <div id="sheet-body"
+    style="position:absolute; bottom:0; left:0; right:0; background:#12121a; border-radius:22px 22px 0 0;
+           padding:20px 20px 40px; max-height:88vh; overflow-y:auto;
+           transform:translateY(0); transition:transform .3s;">
+
+    <!-- Handle -->
+    <div style="width:36px; height:4px; background:#374151; border-radius:2px; margin:0 auto 20px;"></div>
+
+    <!-- Avatar + Title -->
+    <div style="display:flex; align-items:center; gap:14px; margin-bottom:14px;">
+      <div id="sh-avatar"
+        style="width:58px; height:58px; border-radius:16px; background:#6366f130; border:1px solid #6366f1;
+               display:flex; align-items:center; justify-content:center; font-size:26px; flex-shrink:0; color:#fff; font-weight:700;">
+      </div>
+      <div>
+        <h3 id="sh-title" style="font-size:18px; font-weight:700; color:#fff; margin:0 0 4px;"></h3>
+        <div id="sh-role" style="font-size:12px; color:#6366f1;"></div>
       </div>
     </div>
-    {% endif %}
+
+    <!-- Badges row -->
+    <div style="display:flex; gap:8px; margin-bottom:14px; flex-wrap:wrap;">
+      <span id="sh-diff" style="font-size:12px; padding:4px 12px; border-radius:20px; font-weight:600;"></span>
+      <span id="sh-dur"  style="font-size:12px; color:#9ca3af; background:#1e1e2e; padding:4px 12px; border-radius:20px; border:1px solid #374151;"></span>
+      <span id="sh-cat"  style="font-size:12px; color:#6366f1; background:#6366f115; padding:4px 12px; border-radius:20px;"></span>
+    </div>
+
+    <!-- Description -->
+    <p id="sh-desc" style="font-size:14px; color:#9ca3af; margin:0 0 16px; line-height:1.6;"></p>
+
+    <!-- What to expect -->
+    <div id="sh-expect-wrap" style="background:#1a1a2e; border:1px solid #2d2d44; border-radius:14px; padding:14px; margin-bottom:20px; display:none;">
+      <h4 style="font-size:13px; font-weight:600; color:#fff; margin:0 0 10px;">📋 Nima bo'ladi:</h4>
+      <div id="sh-expect" style="display:flex; flex-direction:column; gap:7px;"></div>
+    </div>
+
+    <!-- Start button -->
+    <button id="start-btn" onclick="startSession()"
+      style="width:100%; padding:16px; background:linear-gradient(135deg,#6366f1,#8b5cf6); border:none;
+             border-radius:14px; color:#fff; font-size:16px; font-weight:700; cursor:pointer;
+             display:flex; align-items:center; justify-content:center; gap:8px; transition:opacity .2s;">
+      🎤 Boshlash
+    </button>
   </div>
 </div>
 
-<!-- Scenario Detail Modal -->
-<div id="scenarioModal" class="modal-overlay hidden" onclick="if(event.target===this)this.classList.add('hidden')">
-  <div class="modal-sheet slide-up">
-    <div class="modal-handle"></div>
+<style>
+.type-tab, .diff-tab, .cat-pill { transition: all .2s; }
+.cat-pill { white-space:nowrap; flex-shrink:0; cursor:pointer; }
+#cat-pills::-webkit-scrollbar, .diff-filter::-webkit-scrollbar { display:none; }
+.scenario-card { transition: border-color .2s, transform .1s; cursor:pointer; }
+.scenario-card:active { transform: scale(0.98); }
+</style>
 
-    <div id="scenarioLoading" class="flex items-center justify-center py-12">
-      <div style="width:36px;height:36px;border:3px solid #242430;border-top-color:#6366f1;border-radius:50%" class="spin"></div>
-    </div>
-
-    <div id="scenarioContent" class="hidden space-y-4">
-      <div class="flex items-start justify-between gap-2">
-        <h2 id="sdTitle" class="text-xl font-bold text-white leading-tight"></h2>
-        <span id="sdDiff" class="flex-shrink-0"></span>
-      </div>
-
-      <p id="sdDesc" class="text-sm text-slate-300 leading-relaxed"></p>
-
-      <div id="sdExpect" class="bg-brand/5 border border-brand/15 rounded-xl p-4">
-        <p class="text-xs font-semibold text-brand mb-2 uppercase tracking-wider">What to expect</p>
-        <p id="sdExpectText" class="text-sm text-slate-300 leading-relaxed"></p>
-      </div>
-
-      <div class="flex items-center gap-3 py-2">
-        <div class="flex items-center gap-1.5 text-sm text-slate-400">⏱ <span id="sdDuration"></span> min</div>
-        <div class="w-px h-4 bg-white/10"></div>
-        <div class="flex-1 min-w-0">
-          <p class="text-xs text-slate-500">AI Role: <span id="sdRole" class="text-slate-400"></span></p>
-        </div>
-      </div>
-
-      <button id="startPracticeBtn" onclick="startPractice()" class="btn-primary flex items-center justify-center gap-2">
-        🎤 Start Practice
-      </button>
-    </div>
-  </div>
-</div>
-{% endblock %}
-
-{% block extra_scripts %}
 <script>
-document.querySelectorAll('.nav-item').forEach(el => {
-  if (el.getAttribute('href') === '/webapp/practice/') el.classList.add('active');
+let allCategories = [];
+let currentType   = 'real_life';
+let currentCatId  = null;
+let currentDiff   = 'all';
+let selectedSc    = null;
+
+document.addEventListener('DOMContentLoaded', () => {
+  loadData();
 });
 
-let currentScenarioId = null;
+// ── Data loading ──────────────────────────────────────────────────────────────
 
-async function showScenario(id) {
-  currentScenarioId = id;
-  document.getElementById('scenarioModal').classList.remove('hidden');
-  document.getElementById('scenarioLoading').classList.remove('hidden');
-  document.getElementById('scenarioContent').classList.add('hidden');
-
+async function loadData() {
   try {
-    const r = await fetch(`/webapp/practice/scenario/${id}/detail/`, {credentials:'same-origin'});
+    const r = await fetch('/api/practice/categories/', {credentials:'include'});
     const d = await r.json();
-    document.getElementById('sdTitle').textContent = d.title;
-    document.getElementById('sdDesc').textContent = d.description;
-    document.getElementById('sdDuration').textContent = d.duration_minutes;
-    document.getElementById('sdRole').textContent = d.ai_role;
-    document.getElementById('sdExpectText').textContent = d.what_to_expect || 'An AI will guide you through a structured conversation.';
+    allCategories = Array.isArray(d) ? d : (d.results || []);
+    renderCatPills();
+    renderScenarios();
+  } catch(e) {
+    document.getElementById('scenarios-container').innerHTML =
+      '<div style="text-align:center;padding:60px 0;color:#ef4444;">⚠️ Yuklab bo\'lmadi</div>';
+  }
 
-    const diffColors = {easy:'badge-easy',medium:'badge-medium',hard:'badge-hard'};
-    const diffIcons = {easy:'🟢',medium:'🟡',hard:'🔴'};
-    document.getElementById('sdDiff').className = diffColors[d.difficulty] || 'badge-medium';
-    document.getElementById('sdDiff').textContent = (diffIcons[d.difficulty]||'') + ' ' + d.difficulty.charAt(0).toUpperCase() + d.difficulty.slice(1);
+  // Free badge + limit check
+  try {
+    const r = await fetch('/api/users/profile/', {credentials:'include'});
+    if (r.ok) {
+      const d = await r.json();
+      window._userProfile = d;
+      if (!d.has_premium) {
+        const mockLimit = d.free_mock_limit || 2;
+        const msgLimit = d.free_ai_message_limit || 40;
+        const mockUsed = d.practice_count || 0;
+        const msgUsed = d.ai_message_count || 0;
+        const left = Math.max(0, mockLimit - mockUsed);
+        const isLimited = mockUsed >= mockLimit || msgUsed >= msgLimit;
+        if (isLimited) {
+          // Show premium gate overlay
+          document.getElementById('scenarios-container').innerHTML = `
+            <div style="text-align:center;padding:40px 16px;">
+              <div style="font-size:48px;margin-bottom:16px;">💎</div>
+              <h3 style="font-size:18px;font-weight:700;color:#fff;margin:0 0 10px;">Limit tugadi!</h3>
+              <p style="font-size:14px;color:#9ca3af;margin:0 0 20px;">Bepul ${mockLimit} ta practice limitingiz tugadi. Premium olib cheksiz foydalaning!</p>
+              <a href="/webapp/premium/" style="display:inline-block;padding:14px 28px;background:#6366f1;border-radius:14px;color:#fff;font-size:15px;font-weight:700;text-decoration:none;">💎 Premium olish</a>
+            </div>`;
+          return;
+        }
+        if (left > 0) {
+          document.getElementById('free-text').textContent = left;
+          document.getElementById('free-badge').style.display = 'block';
+        }
+      }
+    }
+  } catch(e) {}
+}
 
-    document.getElementById('scenarioLoading').classList.add('hidden');
-    document.getElementById('scenarioContent').classList.remove('hidden');
-  } catch {
-    document.getElementById('scenarioModal').classList.add('hidden');
-    showToast('Failed to load scenario', 'error');
+// ── Filters ───────────────────────────────────────────────────────────────────
+
+function setType(type) {
+  currentType = type;
+  currentCatId = null;
+  document.querySelectorAll('.type-tab').forEach(b => {
+    const on = b.dataset.type === type;
+    b.style.background = on ? '#6366f1' : '#1e1e2e';
+    b.style.color      = on ? '#fff'     : '#6b7280';
+    b.style.border     = on ? 'none'     : '1px solid #374151';
+  });
+  renderCatPills();
+  renderScenarios();
+}
+
+function setDiff(diff) {
+  currentDiff = diff;
+  document.querySelectorAll('.diff-tab').forEach(b => {
+    const on = b.dataset.diff === diff;
+    b.style.background = on ? '#6366f1'    : 'transparent';
+    b.style.color      = on ? '#fff'       : getDiffColor(b.dataset.diff);
+    b.style.borderColor= on ? '#6366f1'    : '#374151';
+  });
+  renderScenarios();
+}
+
+function filterCat(id) {
+  currentCatId = id;
+  renderCatPills();
+  renderScenarios();
+}
+
+// ── Render helpers ────────────────────────────────────────────────────────────
+
+function renderCatPills() {
+  const cats = allCategories.filter(c => c.category_type === currentType);
+  const el = document.getElementById('cat-pills');
+  if (!cats.length) { el.innerHTML = ''; return; }
+
+  const pills = cats.map(c => {
+    const on = currentCatId === c.id;
+    return `<button class="cat-pill" onclick="filterCat(${c.id})"
+      style="padding:6px 14px; border-radius:20px; background:${on ? '#6366f130' : '#1e1e2e'};
+             color:${on ? '#6366f1' : '#9ca3af'}; font-size:12px;
+             border:1px solid ${on ? '#6366f1' : '#374151'};">
+      ${c.icon} ${c.name}
+    </button>`;
+  });
+  el.innerHTML = `<button class="cat-pill" onclick="filterCat(null)"
+    style="padding:6px 14px; border-radius:20px; background:${currentCatId===null ? '#6366f130' : '#1e1e2e'};
+           color:${currentCatId===null ? '#6366f1' : '#9ca3af'}; font-size:12px;
+           border:1px solid ${currentCatId===null ? '#6366f1' : '#374151'};">
+    Hammasi
+  </button>` + pills.join('');
+}
+
+function renderScenarios() {
+  const container = document.getElementById('scenarios-container');
+  const cats = allCategories.filter(c => c.category_type === currentType);
+
+  let scenarios = [];
+  if (currentCatId) {
+    const cat = cats.find(c => c.id === currentCatId);
+    (cat?.scenarios || []).forEach(sc => scenarios.push({...sc, _cat: cat}));
+  } else {
+    cats.forEach(cat => {
+      (cat.scenarios || []).forEach(sc => scenarios.push({...sc, _cat: cat}));
+    });
+  }
+
+  if (currentDiff !== 'all') {
+    scenarios = scenarios.filter(sc => sc.difficulty === currentDiff);
+  }
+
+  if (!scenarios.length) {
+    container.innerHTML = '<div style="text-align:center;padding:60px 0;color:#6b7280;font-size:14px;">Scenariylar yo\'q</div>';
+    return;
+  }
+
+  // Save for bottom sheet
+  window._scMap = {};
+  scenarios.forEach(sc => { window._scMap[sc.id] = sc; });
+
+  container.innerHTML = scenarios.map(sc => buildScenarioCard(sc)).join('');
+}
+
+function buildScenarioCard(sc) {
+  const color = getDiffColor(sc.difficulty);
+  const dLabel = {easy:'🟢 Easy', medium:'🟡 Medium', hard:'🔴 Hard'}[sc.difficulty] || sc.difficulty;
+  const catIcon = sc._cat?.icon || sc.category_icon || '🗣';
+  const catName = sc._cat?.name || sc.category_name || '';
+
+  return `
+  <div class="scenario-card" onclick="openSheet(${sc.id})"
+    style="background:#1a1a2e; border:1px solid #2d2d44; border-left:3px solid ${color}; border-radius:16px; padding:16px;">
+    <div style="display:flex; align-items:flex-start; gap:12px;">
+      <div style="flex:1; min-width:0;">
+        <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px; flex-wrap:wrap;">
+          <span style="font-size:11px; font-weight:700; color:${color}; background:${color}18; padding:2px 9px; border-radius:20px;">${dLabel}</span>
+          ${catName ? `<span style="font-size:11px; color:#6b7280;">${catIcon} ${catName}</span>` : ''}
+        </div>
+        <div style="font-size:15px; font-weight:600; color:#fff; margin-bottom:5px;">${sc.title}</div>
+        <p style="font-size:12px; color:#9ca3af; margin:0; line-height:1.5;
+          overflow:hidden; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical;">
+          ${sc.description}
+        </p>
+      </div>
+      <div style="color:#6b7280; font-size:20px; flex-shrink:0;">›</div>
+    </div>
+    <div style="display:flex; gap:10px; margin-top:10px; align-items:center;">
+      ${sc.ai_role ? `<span style="font-size:11px; color:#6366f1;">🤖 ${sc.ai_role}</span>` : ''}
+      <span style="font-size:11px; color:#6b7280; margin-left:auto;">⏱ ${sc.duration_minutes} min</span>
+    </div>
+  </div>`;
+}
+
+// ── Bottom Sheet ──────────────────────────────────────────────────────────────
+
+function openSheet(id) {
+  const sc = window._scMap[id];
+  if (!sc) return;
+  selectedSc = sc;
+
+  const color = getDiffColor(sc.difficulty);
+  const dLabel = {easy:'🟢 Easy', medium:'🟡 Medium', hard:'🔴 Hard'}[sc.difficulty] || sc.difficulty;
+  const catIcon = sc._cat?.icon || sc.category_icon || '';
+  const catName = sc._cat?.name || sc.category_name || '';
+
+  // Avatar: use first letter of role or category icon
+  const av = sc.ai_role ? sc.ai_role[0].toUpperCase() : (catIcon || '🗣');
+  document.getElementById('sh-avatar').textContent = av;
+  document.getElementById('sh-title').textContent  = sc.title;
+  document.getElementById('sh-role').textContent   = sc.ai_role ? `🤖 AI: ${sc.ai_role}` : '🤖 AI Coach';
+
+  const diffEl = document.getElementById('sh-diff');
+  diffEl.textContent        = dLabel;
+  diffEl.style.color        = color;
+  diffEl.style.background   = color + '18';
+
+  document.getElementById('sh-dur').textContent  = `⏱ ${sc.duration_minutes} min`;
+  document.getElementById('sh-cat').textContent  = `${catIcon} ${catName}`;
+  document.getElementById('sh-desc').textContent = sc.description;
+
+  // What to expect
+  const expects = (sc.what_to_expect || '').split('\n').filter(s => s.trim());
+  const expWrap = document.getElementById('sh-expect-wrap');
+  if (expects.length) {
+    document.getElementById('sh-expect').innerHTML = expects.map(e => `
+      <div style="display:flex; gap:8px; align-items:flex-start;">
+        <span style="color:#6366f1; flex-shrink:0; margin-top:1px;">•</span>
+        <span style="font-size:13px; color:#d1d5db; line-height:1.5;">${e}</span>
+      </div>`).join('');
+    expWrap.style.display = 'block';
+  } else {
+    expWrap.style.display = 'none';
+  }
+
+  // Reset start button
+  const btn = document.getElementById('start-btn');
+  btn.disabled    = false;
+  btn.innerHTML   = '🎤 Boshlash';
+  btn.style.opacity = '1';
+
+  document.getElementById('sheet-overlay').classList.remove('hidden');
+}
+
+function closeSheet(e) {
+  if (e.target === document.getElementById('sheet-overlay')) {
+    document.getElementById('sheet-overlay').classList.add('hidden');
   }
 }
 
-async function startPractice() {
-  if (!currentScenarioId) return;
-  document.getElementById('startPracticeBtn').textContent = 'Starting...';
-  document.getElementById('startPracticeBtn').disabled = true;
+// ── Start session ─────────────────────────────────────────────────────────────
+
+async function startSession() {
+  if (!selectedSc) return;
+  const btn = document.getElementById('start-btn');
+  btn.disabled      = true;
+  btn.innerHTML     = '⏳ Yuklanmoqda...';
+  btn.style.opacity = '0.7';
 
   try {
-    const r = await fetch(`/webapp/practice/start/${currentScenarioId}/`, {
+    const resp = await fetch(`/webapp/practice/start/${selectedSc.id}/`, {
       method: 'POST',
-      headers: {'X-CSRFToken': getCsrf()},
-      credentials: 'same-origin',
+      credentials: 'include',
+      headers: { 'X-CSRFToken': getCsrf() },
     });
-    const d = await r.json();
-    if (d.redirect) window.location.href = d.redirect;
-    else showToast('Failed to start session', 'error');
-  } catch {
-    showToast('Error starting practice', 'error');
-    document.getElementById('startPracticeBtn').textContent = '🎤 Start Practice';
-    document.getElementById('startPracticeBtn').disabled = false;
+    const data = await resp.json();
+
+    if (data.error === 'free_limit') {
+      window.showToast('💎 Free limitingiz tugadi! Premium oling.', 'error');
+      setTimeout(() => { window.location.href = '/webapp/premium/'; }, 1500);
+      return;
+    }
+
+    if (data.redirect) {
+      window.location.href = data.redirect;
+    } else if (data.session_id) {
+      window.location.href = `/webapp/practice/session/${data.session_id}/`;
+    }
+  } catch(e) {
+    window.showToast('Xato yuz berdi. Qayta urinib ko\'ring.', 'error');
+    btn.disabled      = false;
+    btn.innerHTML     = '🎤 Boshlash';
+    btn.style.opacity = '1';
   }
+}
+
+// ── Utils ─────────────────────────────────────────────────────────────────────
+
+function getDiffColor(d) {
+  return {easy:'#10b981', medium:'#f59e0b', hard:'#ef4444'}[d] || '#9ca3af';
+}
+
+function getCsrf() {
+  const v = `; ${document.cookie}`;
+  const p = v.split(`; csrftoken=`);
+  return p.length === 2 ? p.pop().split(';').shift() : '';
 }
 </script>
 {% endblock %}

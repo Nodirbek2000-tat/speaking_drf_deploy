@@ -7,7 +7,21 @@ class IELTSQuestion(models.Model):
 
     part = models.PositiveSmallIntegerField(choices=PART_CHOICES)
     question = models.TextField()
-    cue_card_points = models.JSONField(null=True, blank=True, help_text='Part 2 uchun - [point1, point2, ...]')
+
+    # Part 1 uchun: birinchi savol (ism/joy so'rash)
+    is_intro = models.BooleanField(
+        default=False,
+        help_text="Part 1 da birinchi savol sifatida ishlatiladi. "
+                  "Masalan: 'Can you tell me your name and where you're from?'"
+    )
+
+    # Part 2 uchun
+    cue_card_points = models.JSONField(
+        null=True, blank=True,
+        help_text='Part 2 uchun — ["Talk about...", "You should say:", "• point1", "• point2"]'
+    )
+
+    # Part 3 uchun: qaysi Part 2 ga bog'liq
     related_part2 = models.ForeignKey(
         'self', null=True, blank=True,
         on_delete=models.SET_NULL,
@@ -15,19 +29,26 @@ class IELTSQuestion(models.Model):
         limit_choices_to={'part': 2},
         help_text='Part 3 uchun: qaysi Part 2 savoliga tegishli?'
     )
+
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         verbose_name = 'IELTS Question'
         verbose_name_plural = 'IELTS Questions'
+        ordering = ['part', '-is_intro', 'id']
 
     def __str__(self):
-        return f"Part {self.part}: {self.question[:60]}"
+        intro_tag = ' [INTRO]' if self.is_intro else ''
+        return f"Part {self.part}{intro_tag}: {self.question[:60]}"
 
 
 class IELTSSession(models.Model):
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='ielts_sessions')
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='ielts_sessions'
+    )
     questions = models.ManyToManyField(IELTSQuestion, through='IELTSAnswer')
     started_at = models.DateTimeField(auto_now_add=True)
     ended_at = models.DateTimeField(null=True, blank=True)

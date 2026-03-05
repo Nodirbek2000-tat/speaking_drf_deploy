@@ -195,12 +195,11 @@ class BotActivityAdmin(admin.ModelAdmin):
 @admin.register(User)
 class CustomUserAdmin(UserAdmin):
     list_display = [
-        'username', 'full_name', 'email',
-        'premium_badge', 'premium_expires', 'ielts_count', 'cefr_count',
-        'is_online_dot', 'created_at'
+        'username', 'full_name', 'telegram_id_col', 'phone_col',
+        'premium_badge', 'last_activity_col', 'is_online_dot', 'last_seen_col', 'created_at'
     ]
     list_filter = ['is_premium', 'is_online', 'is_staff', 'date_joined']
-    search_fields = ['username', 'email', 'telegram_id']
+    search_fields = ['username', 'first_name', 'last_name', 'email', 'telegram_id', 'phone_number']
     readonly_fields = ['referral_code', 'created_at', 'updated_at', 'last_seen']
     ordering = ['-created_at']
 
@@ -263,6 +262,70 @@ class CustomUserAdmin(UserAdmin):
     def full_name(self, obj):
         return f"{obj.first_name} {obj.last_name}".strip() or "—"
     full_name.short_description = "Ismi"
+
+    def telegram_id_col(self, obj):
+        if obj.telegram_id:
+            return format_html('<code style="font-size:11px;color:#17a2b8">{}</code>', obj.telegram_id)
+        return '—'
+    telegram_id_col.short_description = 'TG ID'
+    telegram_id_col.admin_order_field = 'telegram_id'
+
+    def phone_col(self, obj):
+        if obj.phone_number:
+            return format_html('<span style="font-size:12px">{}</span>', obj.phone_number)
+        return format_html('<span style="color:#6c757d;font-size:11px">Yo\'q</span>')
+    phone_col.short_description = 'Telefon'
+
+    def last_seen_col(self, obj):
+        if not obj.last_seen:
+            return '—'
+        now = timezone.now()
+        diff = now - obj.last_seen
+        if diff.seconds < 60 and diff.days == 0:
+            return format_html('<span style="color:#28a745;font-size:11px">Hozir online</span>')
+        elif diff.days == 0:
+            m = diff.seconds // 60
+            h = m // 60
+            if h > 0:
+                return format_html('<span style="color:#ffc107;font-size:11px">{} soat oldin</span>', h)
+            return format_html('<span style="color:#ffc107;font-size:11px">{} daq oldin</span>', m)
+        elif diff.days == 1:
+            return format_html('<span style="color:#6c757d;font-size:11px">Kecha</span>')
+        elif diff.days < 7:
+            return format_html('<span style="color:#6c757d;font-size:11px">{} kun oldin</span>', diff.days)
+        return format_html('<span style="color:#6c757d;font-size:11px">{}</span>',
+                           obj.last_seen.strftime('%d.%m.%Y'))
+    last_seen_col.short_description = 'Oxirgi ko\'rinish'
+    last_seen_col.admin_order_field = 'last_seen'
+
+    def last_activity_col(self, obj):
+        if not obj.telegram_id:
+            return '—'
+        act = BotActivity.objects.filter(telegram_id=obj.telegram_id).order_by('-created_at').first()
+        if not act:
+            return format_html('<span style="color:#6c757d;font-size:11px">Faoliyat yo\'q</span>')
+        cfg = {
+            'start': ('▶', '#20c997'),
+            'ielts_mock': ('📝', '#28a745'),
+            'cefr_mock': ('📊', '#007bff'),
+            'ai_chat': ('🤖', '#6f42c1'),
+            'word_lookup': ('📚', '#fd7e14'),
+            'premium_request': ('💎', '#dc3545'),
+        }
+        emoji, color = cfg.get(act.activity_type, ('●', '#6c757d'))
+        diff = timezone.now() - act.created_at
+        if diff.days == 0:
+            h = diff.seconds // 3600
+            m = (diff.seconds % 3600) // 60
+            ago = f"{h}s" if h > 0 else f"{m}d"
+        else:
+            ago = f"{diff.days}k"
+        return format_html(
+            '<span style="color:{};font-size:11px">{} {}</span> '
+            '<span style="color:#475569;font-size:10px">({})</span>',
+            color, emoji, act.activity_type, ago
+        )
+    last_activity_col.short_description = 'Oxirgi faoliyat'
 
     def premium_badge(self, obj):
         if obj.is_premium:

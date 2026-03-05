@@ -1,731 +1,676 @@
 {% extends 'webapp/base.html' %}
-{% block title %}Speaking — Speaking Bot{% endblock %}
+{% load static %}
+
+{% block title %}Speaking{% endblock %}
 
 {% block content %}
-<div class="safe-bottom overflow-y-auto" id="mainContent">
-  <!-- Header -->
-  <div class="safe-top px-5 pb-2 flex items-center justify-between">
-    <div>
-      <h1 class="text-xl font-bold text-white">Speaking Practice</h1>
-      <p class="text-xs text-slate-400">
-        {% if is_premium %}
-        Unlimited calls · Premium
-        {% else %}
-        {{ free_calls_left }} free call{{ free_calls_left|pluralize }} remaining
-        {% endif %}
+<div id="speaking-app">
+
+  <!-- ═══════════════════════════════════════════
+       SCREEN 1: Asosiy
+  ═══════════════════════════════════════════════ -->
+  <div id="screen-main" class="screen active">
+
+    <div style="padding:20px 20px 8px;display:flex;align-items:center;justify-content:space-between;">
+      <div>
+        <h1 style="font-size:22px;font-weight:700;color:#fff;margin:0;">Speaking</h1>
+        <p style="font-size:13px;color:#9ca3af;margin:4px 0 0;">Ingliz tilida bemalol gaplashing</p>
+      </div>
+      <div id="user-limit-badge" style="display:none;background:#ef444415;border:1px solid #ef4444;border-radius:10px;padding:5px 10px;font-size:11px;font-weight:600;color:#ef4444;">
+        Limit tugadi
+      </div>
+    </div>
+
+    <div style="padding:0 16px;display:flex;flex-direction:column;gap:14px;margin-bottom:14px;">
+
+      <!-- AI chat card -->
+      <div style="background:linear-gradient(135deg,#1a1a3e,#1e1e4e);border:1px solid #6366f1;border-radius:20px;padding:22px;">
+        <div style="display:flex;align-items:center;gap:14px;margin-bottom:12px;">
+          <div style="width:52px;height:52px;border-radius:16px;background:#6366f130;border:1px solid #6366f1;display:flex;align-items:center;justify-content:center;font-size:26px;">🤖</div>
+          <div>
+            <div style="font-size:17px;font-weight:700;color:#fff;">AI bilan gaplashish</div>
+            <div style="font-size:12px;color:#a5b4fc;margin-top:2px;">Istalgan vaqt, istalgan mavzu</div>
+          </div>
+        </div>
+        <p style="font-size:13px;color:#9ca3af;margin:0 0 14px;line-height:1.5;">AI coach bilan real suhbat. Pronunciation va grammar feedback beriladi.</p>
+        <div style="display:flex;gap:8px;">
+          <button onclick="selectGender('male')" id="btn-male"
+            style="flex:1;padding:10px;border-radius:12px;border:2px solid #6366f1;background:#6366f1;color:#fff;font-size:13px;font-weight:600;cursor:pointer;">
+            👨 Male (Alex)
+          </button>
+          <button onclick="selectGender('female')" id="btn-female"
+            style="flex:1;padding:10px;border-radius:12px;border:2px solid #374151;background:transparent;color:#9ca3af;font-size:13px;font-weight:600;cursor:pointer;">
+            👩 Female (Emma)
+          </button>
+        </div>
+        <button onclick="checkLimitThen(startAIChat)" style="width:100%;margin-top:12px;padding:12px;background:#6366f1;border:none;border-radius:12px;color:#fff;font-size:14px;font-weight:600;cursor:pointer;">
+          🎤 AI Chat boshlash
+        </button>
+      </div>
+
+      <!-- Vocabulary search card -->
+      <div style="background:linear-gradient(135deg,#1a2e2e,#1e3e3e);border:1px solid #f59e0b;border-radius:20px;padding:22px;cursor:pointer;" onclick="checkLimitThen(openVocab)">
+        <div style="display:flex;align-items:center;gap:14px;">
+          <div style="width:52px;height:52px;border-radius:16px;background:#f59e0b30;border:1px solid #f59e0b;display:flex;align-items:center;justify-content:center;font-size:26px;">📖</div>
+          <div>
+            <div style="font-size:17px;font-weight:700;color:#fff;">So'zlar qidirish</div>
+            <div style="font-size:12px;color:#fcd34d;margin-top:2px;">AI bilan so'zlarni muhokama qiling</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Real partner card -->
+      <div style="background:linear-gradient(135deg,#1a2e1a,#1e3e1e);border:1px solid #10b981;border-radius:20px;padding:22px;cursor:pointer;" onclick="startPartnerSearch()">
+        <div style="display:flex;align-items:center;gap:14px;margin-bottom:12px;">
+          <div style="width:52px;height:52px;border-radius:16px;background:#10b98130;border:1px solid #10b981;display:flex;align-items:center;justify-content:center;font-size:26px;">🤝</div>
+          <div>
+            <div style="font-size:17px;font-weight:700;color:#fff;">Real partner topish</div>
+            <div style="font-size:12px;color:#6ee7b7;margin-top:2px;">WebSocket orqali jonli ulanish</div>
+          </div>
+        </div>
+        <p style="font-size:13px;color:#9ca3af;margin:0;">Onlayn foydalanuvchi bilan gaplashing. Suhbat tugagach bir-biringizga baho bering.</p>
+      </div>
+    </div>
+
+    <!-- Oxirgi suhbatlar -->
+    <div style="padding:20px 16px 100px;">
+      <h3 style="font-size:15px;font-weight:600;color:#fff;margin:0 0 12px;">📋 Oxirgi suhbatlar</h3>
+      <div id="recent-calls">
+        <div style="text-align:center;padding:20px;color:#6b7280;font-size:13px;">⏳ Yuklanmoqda...</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════
+       SCREEN 2: Partner qidirish
+  ═══════════════════════════════════════════════ -->
+  <div id="screen-searching" class="screen" style="display:none;">
+    <div style="min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 20px;">
+      <div style="position:relative;width:140px;height:140px;margin-bottom:32px;">
+        <div class="search-ring ring1"></div>
+        <div class="search-ring ring2"></div>
+        <div class="search-ring ring3"></div>
+        <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:70px;height:70px;border-radius:50%;background:#10b981;display:flex;align-items:center;justify-content:center;font-size:30px;">🤝</div>
+      </div>
+      <h2 style="font-size:20px;font-weight:700;color:#fff;margin:0 0 8px;">Partner qidirilmoqda...</h2>
+      <p style="font-size:14px;color:#9ca3af;text-align:center;margin:0 0 32px;">Onlayn foydalanuvchilar orasidan mos partner topilmoqda</p>
+      <div id="search-timer" style="font-size:32px;font-weight:700;color:#10b981;margin-bottom:32px;">0:00</div>
+      <button onclick="cancelSearch()" style="padding:14px 32px;background:#1e1e2e;border:1px solid #374151;border-radius:14px;color:#ef4444;font-size:15px;font-weight:600;cursor:pointer;">
+        ❌ Bekor qilish
+      </button>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════
+       SCREEN 3: Aktiv qo'ng'iroq (Partner)
+  ═══════════════════════════════════════════════ -->
+  <div id="screen-call" class="screen" style="display:none;">
+    <div style="min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:space-between;padding:60px 20px 50px;background:#0f0f13;">
+      <div style="text-align:center;">
+        <div style="width:120px;height:120px;border-radius:50%;border:3px solid #10b981;display:flex;align-items:center;justify-content:center;margin:0 auto 16px;position:relative;">
+          <div id="partner-avatar" style="width:100px;height:100px;border-radius:50%;background:#10b981;display:flex;align-items:center;justify-content:center;font-size:36px;font-weight:700;color:#fff;overflow:hidden;"></div>
+          <div style="position:absolute;bottom:8px;right:8px;width:16px;height:16px;background:#10b981;border-radius:50%;border:2px solid #0f0f13;"></div>
+        </div>
+        <h2 id="partner-name" style="font-size:22px;font-weight:700;color:#fff;margin:0 0 6px;"></h2>
+        <div style="display:inline-block;background:#10b98130;border:1px solid #10b981;color:#10b981;font-size:12px;padding:4px 14px;border-radius:20px;margin-bottom:12px;">Real Partner</div>
+        <div id="call-timer" style="font-size:20px;color:#fff;font-weight:600;">0:00</div>
+      </div>
+      <div id="call-mic-status" style="font-size:14px;color:#9ca3af;text-align:center;min-height:24px;"></div>
+      <div style="display:flex;gap:24px;align-items:center;justify-content:center;">
+        <button id="call-mute-btn" onclick="toggleCallMute()" style="width:60px;height:60px;border-radius:50%;background:#2a2a3e;border:none;font-size:22px;cursor:pointer;">🔊</button>
+        <button onclick="endCall()" style="width:72px;height:72px;border-radius:50%;background:#ef4444;border:none;font-size:24px;cursor:pointer;box-shadow:0 4px 20px #ef444460;">📵</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════
+       SCREEN 4: AI qo'ng'iroq
+  ═══════════════════════════════════════════════ -->
+  <div id="screen-ai-call" class="screen" style="display:none;">
+    <div style="min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:space-between;padding:60px 20px 50px;background:#0f0f13;">
+      <div style="text-align:center;">
+        <div id="ai-avatar-ring" style="width:120px;height:120px;border-radius:50%;border:3px solid #6366f1;display:flex;align-items:center;justify-content:center;margin:0 auto 16px;position:relative;">
+          <div id="ai-avatar" style="width:100px;height:100px;border-radius:50%;background:#6366f1;display:flex;align-items:center;justify-content:center;font-size:36px;font-weight:700;color:#fff;"></div>
+          <div style="position:absolute;bottom:8px;right:8px;width:16px;height:16px;background:#10b981;border-radius:50%;border:2px solid #0f0f13;"></div>
+        </div>
+        <h2 id="ai-coach-name" style="font-size:22px;font-weight:700;color:#fff;margin:0 0 6px;"></h2>
+        <div style="display:inline-block;background:#6366f130;border:1px solid #6366f1;color:#6366f1;font-size:12px;padding:4px 14px;border-radius:20px;margin-bottom:12px;">AI English Coach</div>
+        <div id="ai-call-timer" style="font-size:20px;color:#fff;font-weight:600;">0:00</div>
+      </div>
+      <div id="ai-mic-status" style="font-size:14px;color:#9ca3af;text-align:center;min-height:24px;"></div>
+      <div style="display:flex;gap:24px;align-items:center;justify-content:center;">
+        <button id="ai-mute-btn" onclick="toggleAIMute()" style="width:60px;height:60px;border-radius:50%;background:#2a2a3e;border:none;font-size:22px;cursor:pointer;">🔊</button>
+        <button onclick="endAICall()" style="width:72px;height:72px;border-radius:50%;background:#ef4444;border:none;font-size:24px;cursor:pointer;box-shadow:0 4px 20px #ef444460;">📵</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════
+       SCREEN 5: So'z qidirish (Vocabulary)
+  ═══════════════════════════════════════════════ -->
+  <div id="screen-vocab" class="screen" style="display:none;">
+    <div style="padding:16px 16px 8px;display:flex;align-items:center;gap:12px;">
+      <button onclick="goBack()" style="width:36px;height:36px;border-radius:50%;background:#1e1e2e;border:1px solid #374151;color:#fff;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;">←</button>
+      <h2 style="font-size:20px;font-weight:700;color:#fff;margin:0;">📖 So'z qidirish</h2>
+    </div>
+
+    <div style="padding:8px 16px 16px;">
+      <div style="display:flex;gap:8px;">
+        <input id="vocab-input" type="text" placeholder="Inglizcha so'z kiriting..."
+          style="flex:1;background:#1e1e2e;border:1px solid #374151;border-radius:12px;padding:12px 16px;color:#fff;font-size:15px;outline:none;font-family:inherit;"
+          onkeydown="if(event.key==='Enter')lookupWord()"
+          autocomplete="off" autocorrect="off" spellcheck="false"/>
+        <button onclick="lookupWord()" style="padding:12px 18px;background:#f59e0b;border:none;border-radius:12px;color:#fff;font-size:15px;font-weight:700;cursor:pointer;">🔍</button>
+      </div>
+    </div>
+
+    <div id="vocab-result" style="padding:0 16px 100px;"></div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════
+       SCREEN 6: AI bilan so'z muhokamasi
+  ═══════════════════════════════════════════════ -->
+  <div id="screen-vocab-chat" class="screen" style="display:none;">
+    <div style="padding:16px 16px 8px;display:flex;align-items:center;gap:12px;border-bottom:1px solid #374151;">
+      <button onclick="goBackToVocab()" style="width:36px;height:36px;border-radius:50%;background:#1e1e2e;border:1px solid #374151;color:#fff;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;">←</button>
+      <div>
+        <div style="font-size:16px;font-weight:700;color:#fff;" id="vchat-word-title">—</div>
+        <div style="font-size:11px;color:#f59e0b;">AI bilan muhokama</div>
+      </div>
+    </div>
+
+    <div id="vchat-messages" style="padding:12px 16px;display:flex;flex-direction:column;gap:10px;min-height:60vh;max-height:calc(100vh - 200px);overflow-y:auto;"></div>
+
+    <div style="position:fixed;bottom:72px;left:0;right:0;background:#0f0f13;border-top:1px solid #374151;padding:10px 16px;display:flex;gap:8px;align-items:center;">
+      <input id="vchat-input" type="text" placeholder="So'z haqida so'rang..."
+        style="flex:1;background:#1e1e2e;border:1px solid #374151;border-radius:12px;padding:10px 14px;color:#fff;font-size:14px;outline:none;font-family:inherit;"
+        onkeydown="if(event.key==='Enter')sendVocabChat()"
+        autocomplete="off"/>
+      <button onclick="sendVocabChat()" id="vchat-send-btn"
+        style="width:42px;height:42px;border-radius:50%;background:#f59e0b;border:none;color:#fff;font-size:18px;cursor:pointer;flex-shrink:0;">➤</button>
+    </div>
+  </div>
+
+  <!-- Premium Gate Modal -->
+  <div id="premium-gate" style="display:none;position:fixed;inset:0;background:#000000cc;z-index:500;align-items:flex-end;justify-content:center;">
+    <div style="background:#12121a;border-radius:24px 24px 0 0;padding:32px 20px 50px;width:100%;max-width:480px;text-align:center;">
+      <div style="font-size:48px;margin-bottom:16px;">💎</div>
+      <h3 style="font-size:20px;font-weight:700;color:#fff;margin:0 0 10px;">Limit tugadi!</h3>
+      <p id="gate-msg" style="font-size:14px;color:#9ca3af;margin:0 0 24px;line-height:1.6;">
+        Bepul limitingiz tugadi. Premium olib cheksiz foydalaning!
       </p>
+      <a href="/webapp/premium/"
+        style="display:block;padding:15px;background:#6366f1;border-radius:14px;color:#fff;font-size:16px;font-weight:700;text-decoration:none;margin-bottom:12px;">
+        💎 Premium olish
+      </a>
+      <button onclick="document.getElementById('premium-gate').style.display='none'"
+        style="background:transparent;border:none;color:#9ca3af;font-size:14px;cursor:pointer;padding:8px;">
+        Yopish
+      </button>
     </div>
-    {% if is_premium %}
-    <div class="badge-premium">👑</div>
-    {% else %}
-    <a href="/webapp/premium/" class="text-xs font-semibold text-gold border border-gold/30 rounded-lg px-3 py-1.5">Go Premium</a>
-    {% endif %}
   </div>
 
-  <div class="px-4 space-y-4 pb-4">
-    <!-- Start Conversation Button -->
-    <button onclick="showConversationOptions()" class="btn-primary flex items-center justify-center gap-2" {% if not can_call %}disabled style="opacity:0.5"{% endif %}>
-      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8h2a2 2 0 012 2v6a2 2 0 01-2 2h-2v4l-4-4H9a1.994 1.994 0 01-1.414-.586m0 0L11 14h4a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2v4l.586-.586z"/></svg>
-      Start Conversation
-    </button>
-
-    {% if not can_call %}
-    <div class="card p-4 border border-gold/20 bg-gold/5">
-      <div class="flex items-center gap-3">
-        <span class="text-2xl">⚠️</span>
-        <div>
-          <div class="text-sm font-semibold text-gold">Free calls used up</div>
-          <div class="text-xs text-slate-400">Upgrade to Premium for unlimited calls</div>
-        </div>
+  <!-- Rating Modal -->
+  <div id="rating-modal" style="display:none;position:fixed;inset:0;background:#000000aa;z-index:1000;align-items:flex-end;justify-content:center;">
+    <div style="background:#1a1a2e;border-radius:24px 24px 0 0;padding:28px 20px 40px;width:100%;max-width:480px;">
+      <div style="text-align:center;margin-bottom:20px;">
+        <div id="rate-avatar" style="width:64px;height:64px;border-radius:50%;background:#10b981;display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:700;color:#fff;margin:0 auto 12px;"></div>
+        <h3 style="font-size:18px;font-weight:700;color:#fff;margin:0 0 4px;"><span id="rate-partner-name"></span> ga baho bering</h3>
+        <p style="font-size:13px;color:#9ca3af;margin:0;">Suhbat qandoq o'tdi?</p>
       </div>
-    </div>
-    {% endif %}
-
-    <!-- Recent Conversations -->
-    {% if convos %}
-    <div>
-      <p class="section-title">Recent Conversations</p>
-      <div class="card overflow-hidden">
-        {% for c in convos %}
-        <div class="flex items-center gap-3 p-4 border-b border-white/5 last:border-0">
-          <div class="w-10 h-10 rounded-full flex-shrink-0 flex items-center justify-center font-bold text-sm
-            {% if c.partner_type == 'ai' %}bg-brand/20 text-brand{% else %}bg-gradient-to-br from-slate-600 to-slate-700 text-white{% endif %}">
-            {% if c.partner_type == 'ai' %}AI{% else %}{{ c.partner_name|first|upper }}{% endif %}
-          </div>
-          <div class="flex-1 min-w-0">
-            <div class="text-sm font-medium text-white truncate">{{ c.partner_name }}</div>
-            <div class="text-xs text-slate-500 flex items-center gap-1.5">
-              <span>{{ c.date|timesince }} ago</span>
-              {% if c.duration != '0:00' %}<span>·</span><span>{{ c.duration }}</span>{% endif %}
-            </div>
-          </div>
-          <div class="flex flex-col items-end gap-1">
-            {% if c.status == 'ended' and not c.has_rated and c.partner_type == 'human' %}
-            <button onclick="openRating({{ c.room_id }})" class="text-xs text-gold border border-gold/30 rounded-lg px-2 py-1 active:scale-95 transition-transform">Rate</button>
-            {% elif c.status == 'active' %}
-            <span class="text-xs text-success font-medium">Active</span>
-            {% endif %}
-          </div>
-        </div>
-        {% endfor %}
+      <div style="display:flex;justify-content:center;gap:12px;margin-bottom:20px;">
+        <span class="star" data-val="1" onclick="selectStar(1)" style="font-size:36px;cursor:pointer;opacity:0.3;transition:opacity 0.15s;">⭐</span>
+        <span class="star" data-val="2" onclick="selectStar(2)" style="font-size:36px;cursor:pointer;opacity:0.3;transition:opacity 0.15s;">⭐</span>
+        <span class="star" data-val="3" onclick="selectStar(3)" style="font-size:36px;cursor:pointer;opacity:0.3;transition:opacity 0.15s;">⭐</span>
+        <span class="star" data-val="4" onclick="selectStar(4)" style="font-size:36px;cursor:pointer;opacity:0.3;transition:opacity 0.15s;">⭐</span>
+        <span class="star" data-val="5" onclick="selectStar(5)" style="font-size:36px;cursor:pointer;opacity:0.3;transition:opacity 0.15s;">⭐</span>
       </div>
+      <textarea id="rate-comment" placeholder="Izoh qoldiring (ixtiyoriy)..."
+        style="width:100%;background:#0f0f13;border:1px solid #374151;border-radius:12px;padding:12px;color:#fff;font-size:14px;resize:none;height:80px;box-sizing:border-box;outline:none;font-family:inherit;margin-bottom:16px;"></textarea>
+      <button onclick="submitRating()" style="width:100%;padding:15px;background:#10b981;border:none;border-radius:14px;color:#fff;font-size:16px;font-weight:700;cursor:pointer;margin-bottom:10px;">✅ Yuborish</button>
+      <button onclick="skipRating()" style="width:100%;padding:12px;background:transparent;border:none;color:#9ca3af;font-size:14px;cursor:pointer;">O'tkazib yuborish</button>
     </div>
-    {% else %}
-    <div class="flex flex-col items-center justify-center py-16 text-center">
-      <div class="text-6xl mb-4">🎤</div>
-      <p class="text-lg font-semibold text-white mb-2">No conversations yet</p>
-      <p class="text-sm text-slate-400">Start your first speaking session!</p>
-    </div>
-    {% endif %}
   </div>
+
 </div>
 
-<!-- Hidden audio element for remote stream -->
-<audio id="remoteAudio" autoplay playsinline></audio>
+<style>
+.screen { animation: fadeIn 0.2s ease; }
+@keyframes fadeIn { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:translateY(0)} }
+.search-ring { position:absolute;border-radius:50%;border:2px solid #10b981;top:50%;left:50%;transform:translate(-50%,-50%);animation:pulse-ring 2s ease-out infinite; }
+.ring1{width:90px;height:90px;animation-delay:0s}
+.ring2{width:115px;height:115px;animation-delay:0.5s}
+.ring3{width:140px;height:140px;animation-delay:1s}
+@keyframes pulse-ring { 0%{opacity:0.8;transform:translate(-50%,-50%) scale(0.8)} 100%{opacity:0;transform:translate(-50%,-50%) scale(1.3)} }
+</style>
 
-<!-- ══════════════════════════════════════════════
-     MODAL: Conversation Options
-═══════════════════════════════════════════════ -->
-<div id="optionsModal" class="modal-overlay hidden" onclick="if(event.target===this)closeOptions()">
-  <div class="modal-sheet slide-up">
-    <div class="modal-handle"></div>
-    <h2 class="text-lg font-bold text-white mb-5">Start a Conversation</h2>
-
-    <!-- Partner Type -->
-    <p class="section-title">Talk with</p>
-    <div class="grid grid-cols-2 gap-2 mb-4">
-      <button class="option-btn selected" onclick="selectPartner(this,'male')" data-val="male">
-        <span class="text-xl">👨</span>
-        <div><div class="text-sm font-semibold">Male</div><div class="text-xs text-slate-400">Men</div></div>
-      </button>
-      <button class="option-btn" onclick="selectPartner(this,'female')" data-val="female">
-        <span class="text-xl">👩</span>
-        <div><div class="text-sm font-semibold">Female</div><div class="text-xs text-slate-400">Women</div></div>
-      </button>
-      <button class="option-btn" onclick="selectPartner(this,'any')" data-val="any">
-        <span class="text-xl">🌍</span>
-        <div><div class="text-sm font-semibold">Around the World</div><div class="text-xs text-slate-400">Anyone</div></div>
-      </button>
-      <button class="option-btn" onclick="selectPartner(this,'ai')" data-val="ai">
-        <span class="text-xl">🤖</span>
-        <div><div class="text-sm font-semibold">AI Partner</div><div class="text-xs text-slate-400">Alex Coach</div></div>
-      </button>
-    </div>
-
-    <!-- Level -->
-    <p class="section-title">Your Level</p>
-    <div id="levelSection" class="grid grid-cols-2 gap-2 mb-6">
-      <button class="option-btn selected" onclick="selectLevel(this,'beginner')" data-val="beginner">
-        <span class="text-xl">🌱</span>
-        <div><div class="text-sm font-semibold">Beginner</div><div class="text-xs text-slate-400">A1 – A2</div></div>
-      </button>
-      <button class="option-btn" onclick="selectLevel(this,'intermediate')" data-val="intermediate">
-        <span class="text-xl">📈</span>
-        <div><div class="text-sm font-semibold">Intermediate</div><div class="text-xs text-slate-400">B1 – B2</div></div>
-      </button>
-      <button class="option-btn" onclick="selectLevel(this,'advanced')" data-val="advanced">
-        <span class="text-xl">🚀</span>
-        <div><div class="text-sm font-semibold">Advanced</div><div class="text-xs text-slate-400">C1 – C2</div></div>
-      </button>
-      <button class="option-btn" onclick="selectLevel(this,'any')" data-val="any">
-        <span class="text-xl">♾️</span>
-        <div><div class="text-sm font-semibold">Every Level</div><div class="text-xs text-slate-400">All levels</div></div>
-      </button>
-    </div>
-
-    <button onclick="startSearch()" class="btn-primary flex items-center justify-center gap-2">
-      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
-      Find Speaking Partner
-    </button>
-  </div>
-</div>
-
-<!-- ══════════════════════════════════════════════
-     PANEL: Searching
-═══════════════════════════════════════════════ -->
-<div id="searchingPanel" class="hidden fixed inset-0 z-[200] flex flex-col items-center justify-center" style="background:#0f0f13">
-  <div class="text-center px-8">
-    <!-- Spinning avatar -->
-    <div class="relative w-36 h-36 mx-auto mb-8">
-      <svg class="absolute inset-0 w-full h-full spin" viewBox="0 0 144 144" fill="none">
-        <circle cx="72" cy="72" r="66" stroke="#242430" stroke-width="4"/>
-        <circle cx="72" cy="72" r="66" stroke="#6366f1" stroke-width="4"
-          stroke-linecap="round"
-          stroke-dasharray="120 300"
-          stroke-dashoffset="0"/>
-      </svg>
-      <svg class="absolute inset-0 w-full h-full" style="animation:spin 2.5s linear infinite reverse" viewBox="0 0 144 144" fill="none">
-        <circle cx="72" cy="72" r="54" stroke="#818cf8" stroke-width="2"
-          stroke-linecap="round"
-          stroke-dasharray="60 280"
-          stroke-dashoffset="40" opacity="0.4"/>
-      </svg>
-      <div class="absolute inset-5 rounded-full bg-gradient-to-br from-brand/30 to-purple-800/30 border border-brand/20 flex items-center justify-center">
-        <svg class="w-10 h-10 text-brand" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/>
-        </svg>
-      </div>
-    </div>
-    <h2 class="text-xl font-bold text-white mb-2">Finding Partner...</h2>
-    <p class="text-sm text-slate-400 mb-2">Looking for a speaking partner for you</p>
-    <div class="flex justify-center gap-1.5 mb-10">
-      <div class="w-1.5 h-1.5 rounded-full bg-brand" style="animation:pulseDot 1.2s ease-in-out infinite;animation-delay:0s"></div>
-      <div class="w-1.5 h-1.5 rounded-full bg-brand" style="animation:pulseDot 1.2s ease-in-out infinite;animation-delay:0.2s"></div>
-      <div class="w-1.5 h-1.5 rounded-full bg-brand" style="animation:pulseDot 1.2s ease-in-out infinite;animation-delay:0.4s"></div>
-    </div>
-    <button onclick="cancelSearch()" class="btn-secondary" style="width:auto;padding:12px 36px">Cancel</button>
-  </div>
-</div>
-
-<!-- ══════════════════════════════════════════════
-     PANEL: Connecting (partner topilganda)
-═══════════════════════════════════════════════ -->
-<div id="connectingPanel" class="hidden fixed inset-0 z-[210] flex flex-col items-center justify-center" style="background:#0f0f13">
-  <div class="text-center px-8">
-    <div class="w-24 h-24 rounded-full bg-gradient-to-br from-brand to-purple-600 flex items-center justify-center text-4xl font-bold text-white mx-auto mb-6" id="connectingAvatar">P</div>
-    <h2 class="text-xl font-bold text-white mb-2">Connecting...</h2>
-    <p id="connectingName" class="text-sm text-slate-400 mb-6">Partner found!</p>
-    <div class="flex justify-center gap-1.5">
-      <div class="w-2 h-2 rounded-full bg-success" style="animation:pulseDot 1s ease-in-out infinite;animation-delay:0s"></div>
-      <div class="w-2 h-2 rounded-full bg-success" style="animation:pulseDot 1s ease-in-out infinite;animation-delay:0.15s"></div>
-      <div class="w-2 h-2 rounded-full bg-success" style="animation:pulseDot 1s ease-in-out infinite;animation-delay:0.3s"></div>
-    </div>
-  </div>
-</div>
-
-<!-- ══════════════════════════════════════════════
-     PANEL: Active Call
-═══════════════════════════════════════════════ -->
-<div id="callPanel" class="hidden fixed inset-0 z-[200] flex flex-col" style="background:#0f0f13">
-  <div class="safe-top px-5 py-2 flex items-center justify-between">
-    <div id="callStatus" class="flex items-center gap-2">
-      <div class="w-2 h-2 rounded-full bg-success pulse-dot"></div>
-      <span class="text-xs font-medium text-success">Connected</span>
-    </div>
-    <div id="callTimer" class="font-mono text-lg font-bold text-white">0:00</div>
-  </div>
-
-  <div class="flex-1 flex flex-col items-center justify-center px-8 text-center">
-    <div id="callAvatar" class="w-24 h-24 rounded-full bg-gradient-to-br from-brand to-purple-600 flex items-center justify-center text-4xl font-bold text-white mb-4">U</div>
-    <h2 id="callPartnerName" class="text-2xl font-bold text-white mb-1">Partner</h2>
-    <p id="callPartnerUsername" class="text-sm text-slate-400 mb-6">@username</p>
-
-    <div id="connectionError" class="hidden bg-danger/10 border border-danger/30 rounded-xl px-4 py-2 flex items-center gap-2">
-      <span class="text-sm text-danger">⚠️ Connection issue — trying to reconnect...</span>
-    </div>
-  </div>
-
-  <div class="pb-safe px-8 pb-12" style="padding-bottom: calc(48px + env(safe-area-inset-bottom,0px))">
-    <div class="flex items-center justify-center gap-8">
-      <div class="flex flex-col items-center gap-2">
-        <button id="micBtn" onclick="toggleMic()" class="w-16 h-16 rounded-full bg-dark-800 border border-white/10 flex items-center justify-center transition-all active:scale-95" style="background:#242430">
-          <svg id="micOnIcon" class="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"/></svg>
-          <svg id="micOffIcon" class="w-7 h-7 text-slate-400 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" clip-rule="evenodd"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2"/></svg>
-        </button>
-        <span class="text-xs text-slate-400" id="micLabel">Mic On</span>
-      </div>
-
-      <div class="flex flex-col items-center gap-2">
-        <button onclick="endCall()" class="w-20 h-20 rounded-full bg-danger flex items-center justify-center transition-all active:scale-95 shadow-lg shadow-danger/30">
-          <svg class="w-8 h-8 text-white" fill="currentColor" viewBox="0 0 24 24"><path d="M20.01 15.38c-1.23 0-2.42-.2-3.53-.56a.977.977 0 00-1.01.24l-1.57 1.97c-2.83-1.35-5.48-3.9-6.89-6.83l1.95-1.66c.27-.28.35-.67.24-1.02-.37-1.11-.56-2.3-.56-3.53 0-.54-.45-.99-.99-.99H4.19C3.65 3 3 3.24 3 3.99 3 13.28 10.73 21 20.01 21c.71 0 .99-.63.99-1.18v-3.45c0-.54-.45-.99-.99-.99z"/></svg>
-        </button>
-        <span class="text-xs text-danger font-semibold">End Call</span>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- ══════════════════════════════════════════════
-     PANEL: AI Call
-═══════════════════════════════════════════════ -->
-<div id="aiCallPanel" class="hidden fixed inset-0 z-[200] flex flex-col" style="background:#0f0f13">
-  <div class="safe-top px-5 py-2 flex items-center justify-between">
-    <div class="flex items-center gap-2">
-      <div class="w-2 h-2 rounded-full bg-brand pulse-dot"></div>
-      <span class="text-xs font-medium text-brand">AI Speaking Practice</span>
-    </div>
-    <div id="aiTimer" class="font-mono text-lg font-bold text-white">0:00</div>
-  </div>
-
-  <div class="flex-1 flex flex-col items-center justify-center px-6">
-    <div class="w-20 h-20 rounded-full bg-gradient-to-br from-brand to-purple-600 flex items-center justify-center text-4xl mb-4">🤖</div>
-    <h2 class="text-xl font-bold text-white mb-1">Alex</h2>
-    <p class="text-sm text-slate-400 mb-8">AI Speaking Coach</p>
-
-    <div id="aiTranscript" class="w-full max-w-sm bg-dark-800 rounded-2xl p-4 min-h-24 max-h-48 overflow-y-auto space-y-2" style="background:#1a1a22">
-      <p class="text-sm text-slate-500 text-center">AI will respond when you speak...</p>
-    </div>
-  </div>
-
-  <div class="px-8 pb-12" style="padding-bottom: calc(48px + env(safe-area-inset-bottom,0px))">
-    <div class="flex items-center justify-center gap-8">
-      <div class="flex flex-col items-center gap-2">
-        <button id="aiMicBtn"
-          onmousedown="startAIRecording(event)" ontouchstart="startAIRecording(event)"
-          onmouseup="stopAIRecording(event)" ontouchend="stopAIRecording(event)"
-          class="w-16 h-16 rounded-full border-2 border-white/10 flex items-center justify-center transition-all"
-          style="background:#242430">
-          <svg class="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"/></svg>
-        </button>
-        <span class="text-xs text-slate-400" id="aiMicLabel">Hold to Talk</span>
-      </div>
-
-      <div class="flex flex-col items-center gap-2">
-        <button onclick="endAICall()" class="w-20 h-20 rounded-full bg-danger flex items-center justify-center active:scale-95 transition-transform shadow-lg shadow-danger/30">
-          <svg class="w-8 h-8 text-white" fill="currentColor" viewBox="0 0 24 24"><path d="M20.01 15.38c-1.23 0-2.42-.2-3.53-.56a.977.977 0 00-1.01.24l-1.57 1.97c-2.83-1.35-5.48-3.9-6.89-6.83l1.95-1.66c.27-.28.35-.67.24-1.02-.37-1.11-.56-2.3-.56-3.53 0-.54-.45-.99-.99-.99H4.19C3.65 3 3 3.24 3 3.99 3 13.28 10.73 21 20.01 21c.71 0 .99-.63.99-1.18v-3.45c0-.54-.45-.99-.99-.99z"/></svg>
-        </button>
-        <span class="text-xs text-danger font-semibold">End</span>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- ══════════════════════════════════════════════
-     MODAL: Rate Call
-═══════════════════════════════════════════════ -->
-<div id="ratingModal" class="modal-overlay hidden">
-  <div class="modal-sheet slide-up">
-    <div class="modal-handle"></div>
-    <h2 class="text-lg font-bold text-white mb-2">Rate this conversation</h2>
-    <p class="text-sm text-slate-400 mb-6">How was your speaking session?</p>
-
-    <div class="flex justify-center gap-3 mb-6" id="starRow">
-      {% for i in "12345" %}
-      <button onclick="setRating({{ forloop.counter }})" class="text-5xl transition-transform active:scale-90" data-star="{{ forloop.counter }}">☆</button>
-      {% endfor %}
-    </div>
-
-    <textarea id="ratingComment" placeholder="Add a comment (optional)" rows="3"
-      class="w-full bg-dark-700 border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-brand resize-none mb-4"
-      style="background:#242430"></textarea>
-
-    <button onclick="submitRating()" class="btn-primary flex items-center justify-center gap-2">
-      Submit Rating
-    </button>
-    <button onclick="skipRating()" class="btn-secondary mt-2">Skip</button>
-  </div>
-</div>
-{% endblock %}
-
-{% block extra_scripts %}
 <script>
-// ── State ─────────────────────────────
-const wsProto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-let genderFilter = 'male', level = 'beginner', partnerType = 'male';
-let matchSocket = null, callSocket = null, peerConn = null;
-let localStream = null, remoteStream = null;
-let micEnabled = true;
-let callIntervalId = null, callSecs = 0;
-let aiIntervalId = null, aiSecs = 0;
-let aiSocket = null;
-let mediaRecorder = null, audioChunks = [];
-let currentRoomId = null, currentRole = null;
-let ratingRoomId = null, selectedRating = 0;
-let isRecording = false;
+let selectedGender = 'male';
+let searchTimer=null, callTimer=null;
+let searchSeconds=0, callSeconds=0;
+let callMuted=false, aiMuted=false;
+let currentRoomId=null, currentPartnerId=null, currentPartnerName='';
+let wsMatch=null, wsCall=null, wsAI=null;
+let selectedRating=0;
+let userProfile = null;  // cached profile
 
-// ── Navigation ────────────────────────
-document.querySelectorAll('.nav-item').forEach(el => {
-  if (el.getAttribute('href') === '/webapp/speaking/') el.classList.add('active');
+// Vocabulary chat state
+let vchatWord = '';
+let vchatHistory = [];
+let vchatAudio = null;
+
+const AI_PROFILES = {
+  male:   {name:'Alex', emoji:'A', color:'#6366f1'},
+  female: {name:'Emma', emoji:'E', color:'#ec4899'},
+};
+
+// ── Back button (history API) ─────────────────────────────────────────────────
+let screenStack = ['screen-main'];
+
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => { s.style.display='none'; s.classList.remove('active'); });
+  const t = document.getElementById(id);
+  if (t) { t.style.display='block'; t.classList.add('active'); }
+}
+
+function navigateTo(id) {
+  screenStack.push(id);
+  history.pushState({screen: id}, '', '');
+  showScreen(id);
+}
+
+function goBack() {
+  if (screenStack.length > 1) {
+    history.back();  // triggers popstate → popstate handler shows prev screen
+  }
+}
+
+function goBackToVocab() {
+  if (vchatAudio) { vchatAudio.pause(); vchatAudio = null; }
+  history.back();
+}
+
+window.addEventListener('popstate', (e) => {
+  if (e.state && e.state.screen) {
+    if (screenStack.length > 1) screenStack.pop();
+    showScreen(e.state.screen);
+  } else {
+    screenStack = ['screen-main'];
+    showScreen('screen-main');
+  }
 });
 
-// ── Partner / Level select ────────────
-function selectPartner(btn, val) {
-  document.querySelectorAll('#optionsModal .option-btn[data-val]').forEach(b => {
-    if (['male','female','any','ai'].includes(b.dataset.val)) b.classList.remove('selected');
-  });
-  btn.classList.add('selected');
-  partnerType = val;
-  if (['male', 'female', 'any'].includes(val)) genderFilter = val;
+// Initialize history state
+history.replaceState({screen: 'screen-main'}, '', '');
 
-  const ls = document.getElementById('levelSection');
-  if (ls) ls.style.opacity = val === 'ai' ? '0.4' : '1';
+// ── Premium gate ──────────────────────────────────────────────────────────────
+function isUserLimited() {
+  if (!userProfile) return false;
+  if (userProfile.has_premium) return false;
+  const mockCount = userProfile.practice_count || 0;
+  const mockLimit = userProfile.free_mock_limit || 2;
+  const msgCount = userProfile.ai_message_count || 0;
+  const msgLimit = userProfile.free_ai_message_limit || 40;
+  return mockCount >= mockLimit || msgCount >= msgLimit;
 }
 
-function selectLevel(btn, val) {
-  document.querySelectorAll('#optionsModal .option-btn[data-val]').forEach(b => {
-    if (['beginner','intermediate','advanced','any'].includes(b.dataset.val)) b.classList.remove('selected');
-  });
-  btn.classList.add('selected');
-  level = val;
-}
-
-function showConversationOptions() {
-  document.getElementById('optionsModal').classList.remove('hidden');
-}
-function closeOptions() {
-  document.getElementById('optionsModal').classList.add('hidden');
-}
-
-// ── Start Search ──────────────────────
-async function startSearch() {
-  closeOptions();
-
-  if (partnerType === 'ai') {
-    startAISession();
-    return;
-  }
-
-  // Mic ruxsat so'rash
-  try {
-    localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
-  } catch (e) {
-    showToast('Microphone permission denied. Please allow microphone access.', 'error');
-    return;
-  }
-
-  window._inCall = true;
-  document.getElementById('searchingPanel').classList.remove('hidden');
-
-  // ✅ TOKEN YO'Q — to'g'ridan-to'g'ri session cookie bilan ulanadi
-  matchSocket = new WebSocket(`${wsProto}//${location.host}/ws/voice-match/`);
-
-  matchSocket.onopen = () => {
-    matchSocket.send(JSON.stringify({ type: 'search', gender_filter: genderFilter, level }));
-  };
-
-  matchSocket.onmessage = (e) => {
-    const d = JSON.parse(e.data);
-    if (d.type === 'matched') {
-      currentRoomId = d.room_id;
-      currentRole = d.role;
-      matchSocket.close();
-      matchSocket = null;
-      // Avval "Connecting..." panelini ko'rsat
-      showConnectingPanel(d.partner);
-      // Keyin WebRTC ulan
-      setupWebRTC(d.role, d.room_id, d.partner);
-    }
-  };
-
-  matchSocket.onerror = () => {
-    showToast('Connection error. Please try again.', 'error');
-    cancelSearch();
-  };
-
-  matchSocket.onclose = (e) => {
-    if (e.code === 4001) {
-      showToast('Please log in again', 'error');
-      window.location.href = '/webapp/';
-    }
-  };
-}
-
-function cancelSearch() {
-  if (matchSocket) {
-    matchSocket.send(JSON.stringify({ type: 'cancel' }));
-    matchSocket.close();
-    matchSocket = null;
-  }
-  if (localStream) { localStream.getTracks().forEach(t => t.stop()); localStream = null; }
-  window._inCall = false;
-  document.getElementById('searchingPanel').classList.add('hidden');
-}
-
-// ── Connecting Panel ──────────────────
-function showConnectingPanel(partner) {
-  document.getElementById('searchingPanel').classList.add('hidden');
-  const panel = document.getElementById('connectingPanel');
-  panel.classList.remove('hidden');
-  document.getElementById('connectingAvatar').textContent = (partner.name || 'P')[0].toUpperCase();
-  document.getElementById('connectingName').textContent = 'Connecting with ' + (partner.name || 'Partner') + '...';
-}
-
-// ── Show Call Panel ───────────────────
-function showCallPanel(partner) {
-  document.getElementById('connectingPanel').classList.add('hidden');
-  document.getElementById('searchingPanel').classList.add('hidden');
-  const panel = document.getElementById('callPanel');
-  panel.classList.remove('hidden');
-  document.getElementById('callPartnerName').textContent = partner.name || 'Partner';
-  document.getElementById('callPartnerUsername').textContent = partner.username ? `@${partner.username}` : '';
-  document.getElementById('callAvatar').textContent = (partner.name || 'P')[0].toUpperCase();
-  startCallTimer();
-}
-
-function startCallTimer() {
-  callSecs = 0;
-  clearInterval(callIntervalId);
-  callIntervalId = setInterval(() => {
-    callSecs++;
-    document.getElementById('callTimer').textContent = formatTime(callSecs);
-  }, 1000);
-}
-
-// ── WebRTC Setup ──────────────────────
-async function setupWebRTC(role, roomId, partner) {
-  const ice = {
-    iceServers: [
-      { urls: 'stun:stun.l.google.com:19302' },
-      { urls: 'stun:stun1.l.google.com:19302' }
-    ]
-  };
-  peerConn = new RTCPeerConnection(ice);
-
-  localStream.getTracks().forEach(t => peerConn.addTrack(t, localStream));
-
-  remoteStream = new MediaStream();
-  peerConn.ontrack = e => {
-    e.streams[0].getTracks().forEach(t => remoteStream.addTrack(t));
-    document.getElementById('remoteAudio').srcObject = remoteStream;
-  };
-
-  peerConn.onicecandidate = e => {
-    if (e.candidate && callSocket && callSocket.readyState === WebSocket.OPEN) {
-      callSocket.send(JSON.stringify({ type: 'ice_candidate', candidate: e.candidate.toJSON() }));
-    }
-  };
-
-  peerConn.onconnectionstatechange = () => {
-    if (['failed', 'disconnected'].includes(peerConn.connectionState)) {
-      document.getElementById('connectionError').classList.remove('hidden');
-    } else if (peerConn.connectionState === 'connected') {
-      document.getElementById('connectionError').classList.add('hidden');
-      // Connected! "Connecting" panelini yashir, call panelini ko'rsat
-      showCallPanel(partner);
-    }
-  };
-
-  // ✅ TOKEN YO'Q — session cookie bilan ulanadi
-  callSocket = new WebSocket(`${wsProto}//${location.host}/ws/voice-call/${roomId}/`);
-
-  callSocket.onopen = async () => {
-    if (role === 'caller') {
-      const offer = await peerConn.createOffer();
-      await peerConn.setLocalDescription(offer);
-      callSocket.send(JSON.stringify({ type: 'offer', sdp: offer }));
-    }
-  };
-
-  callSocket.onmessage = async (e) => {
-    const msg = JSON.parse(e.data);
-    if (msg.type === 'offer' && role === 'callee') {
-      await peerConn.setRemoteDescription(new RTCSessionDescription(msg.sdp));
-      const ans = await peerConn.createAnswer();
-      await peerConn.setLocalDescription(ans);
-      callSocket.send(JSON.stringify({ type: 'answer', sdp: ans }));
-      showCallPanel(partner);
-    } else if (msg.type === 'answer' && role === 'caller') {
-      await peerConn.setRemoteDescription(new RTCSessionDescription(msg.sdp));
-    } else if (msg.type === 'ice_candidate' && msg.candidate) {
-      try { await peerConn.addIceCandidate(new RTCIceCandidate(msg.candidate)); } catch {}
-    } else if (msg.type === 'call_ended') {
-      endCall(false);
-      showToast('Partner ended the call', 'info');
-    }
-  };
-
-  callSocket.onerror = () => {
-    showToast('Call connection error', 'error');
-    endCall(false);
-  };
-}
-
-// ── End Call ──────────────────────────
-function endCall(showRating = true) {
-  clearInterval(callIntervalId);
-  window._inCall = false;
-
-  if (callSocket) {
-    try { callSocket.send(JSON.stringify({ type: 'end_call' })); } catch {}
-    callSocket.close();
-    callSocket = null;
-  }
-  if (peerConn) { peerConn.close(); peerConn = null; }
-  if (localStream) { localStream.getTracks().forEach(t => t.stop()); localStream = null; }
-
-  document.getElementById('callPanel').classList.add('hidden');
-  document.getElementById('connectingPanel').classList.add('hidden');
-
-  if (showRating && currentRoomId) {
-    openRating(currentRoomId);
+function checkLimitThen(fn) {
+  if (isUserLimited()) {
+    showPremiumGate();
   } else {
-    location.reload();
+    fn();
   }
 }
 
-// ── Mic Toggle ────────────────────────
-function toggleMic() {
-  micEnabled = !micEnabled;
-  if (localStream) localStream.getAudioTracks().forEach(t => t.enabled = micEnabled);
-  document.getElementById('micOnIcon').classList.toggle('hidden', !micEnabled);
-  document.getElementById('micOffIcon').classList.toggle('hidden', micEnabled);
-  document.getElementById('micLabel').textContent = micEnabled ? 'Mic On' : 'Mic Off';
-  document.getElementById('micBtn').style.background = micEnabled ? '#242430' : 'rgba(239,68,68,0.2)';
+function showPremiumGate(msg) {
+  const gate = document.getElementById('premium-gate');
+  if (msg) document.getElementById('gate-msg').textContent = msg;
+  gate.style.display = 'flex';
 }
 
-// ── AI Session ────────────────────────
-async function startAISession() {
-  window._inCall = true;
-  document.getElementById('aiCallPanel').classList.remove('hidden');
-  aiSecs = 0;
-  clearInterval(aiIntervalId);
-  aiIntervalId = setInterval(() => {
-    aiSecs++;
-    document.getElementById('aiTimer').textContent = formatTime(aiSecs);
-  }, 1000);
+document.addEventListener('DOMContentLoaded', () => {
+  loadUserInfo();
+  loadRecentCalls();
+});
 
-  // ✅ TOKEN YO'Q — session cookie bilan ulanadi
-  aiSocket = new WebSocket(`${wsProto}//${location.host}/ws/ai-call/`);
-  aiSocket.binaryType = 'arraybuffer';
-
-  aiSocket.onopen = () => {
-    addTranscript('System', 'Connected! Alex is ready...');
-  };
-
-  aiSocket.onerror = () => {
-    showToast('Connection error. Please try again.', 'error');
-    endAICall();
-  };
-
-  aiSocket.onclose = (e) => {
-    if (e.code === 4001) {
-      showToast('Please log in again', 'error');
-      window.location.href = '/webapp/';
-    } else if (e.code !== 1000 && window._inCall) {
-      showToast('Connection lost.', 'error');
-    }
-  };
-
-  aiSocket.onmessage = async (e) => {
-    if (typeof e.data === 'string') {
-      const d = JSON.parse(e.data);
-      if (d.type === 'ai_text') addTranscript('Alex', d.text);
-      else if (d.type === 'user_transcript') addTranscript('You', d.text);
-      else if (d.type === 'ended') endAICall();
-      else if (d.type === 'error') showToast(d.text || 'Server error', 'error');
-    } else {
-      // Audio (arraybuffer)
-      try {
-        const blob = new Blob([e.data], { type: 'audio/mpeg' });
-        const url = URL.createObjectURL(blob);
-        const audio = new Audio(url);
-        audio.onended = () => URL.revokeObjectURL(url);
-        await audio.play();
-      } catch {}
-    }
-  };
-}
-
-function addTranscript(speaker, text) {
-  const div = document.getElementById('aiTranscript');
-  const placeholder = div.querySelector('p');
-  if (placeholder) placeholder.remove();
-
-  const el = document.createElement('div');
-  el.className = `text-sm mb-1 ${speaker === 'Alex' ? 'text-brand' : speaker === 'System' ? 'text-slate-500' : 'text-white'}`;
-
-  // ✅ XSS xavfsiz
-  const nameSpan = document.createElement('span');
-  nameSpan.className = 'font-semibold';
-  nameSpan.textContent = speaker + ': ';
-  el.appendChild(nameSpan);
-  el.appendChild(document.createTextNode(text));
-
-  div.appendChild(el);
-  div.scrollTop = div.scrollHeight;
-}
-
-async function startAIRecording(e) {
-  if (e) e.preventDefault();
-  if (isRecording || !aiSocket || aiSocket.readyState !== WebSocket.OPEN) return;
+async function loadUserInfo() {
   try {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    audioChunks = [];
-    const mimeType = MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : 'audio/mp4';
-    mediaRecorder = new MediaRecorder(stream, { mimeType });
-    mediaRecorder.ondataavailable = ev => { if (ev.data.size > 0) audioChunks.push(ev.data); };
-    mediaRecorder.onstop = () => {
-      const blob = new Blob(audioChunks, { type: mimeType });
-      if (blob.size > 500 && aiSocket && aiSocket.readyState === WebSocket.OPEN) {
-        aiSocket.send(blob);
-      }
-      stream.getTracks().forEach(t => t.stop());
-    };
-    mediaRecorder.start();
-    isRecording = true;
-    document.getElementById('aiMicBtn').style.background = 'rgba(239,68,68,0.3)';
-    document.getElementById('aiMicBtn').style.borderColor = '#ef4444';
-    document.getElementById('aiMicLabel').textContent = '🔴 Recording...';
-  } catch {
-    showToast('Microphone permission denied', 'error');
+    const r = await fetch('/api/users/profile/', {credentials:'include'});
+    if (!r.ok) return;
+    userProfile = await r.json();
+    if (isUserLimited()) {
+      document.getElementById('user-limit-badge').style.display = 'block';
+    }
+  } catch(e){}
+}
+
+// ── Vocabulary search ─────────────────────────────────────────────────────────
+function openVocab() {
+  vchatWord = '';
+  vchatHistory = [];
+  document.getElementById('vocab-input').value = '';
+  document.getElementById('vocab-result').innerHTML = '';
+  navigateTo('screen-vocab');
+}
+
+async function lookupWord() {
+  const word = document.getElementById('vocab-input').value.trim();
+  if (!word) return;
+
+  const resultEl = document.getElementById('vocab-result');
+  resultEl.innerHTML = '<div style="text-align:center;padding:40px;color:#9ca3af;font-size:14px;">⏳ Qidirilmoqda...</div>';
+
+  try {
+    const r = await fetch('/api/vocabulary/lookup/', {
+      method: 'POST',
+      credentials: 'include',
+      headers: {'Content-Type':'application/json', 'X-CSRFToken': getCookie('csrftoken')},
+      body: JSON.stringify({word}),
+    });
+    if (r.status === 403) { showPremiumGate('So\'z qidirish uchun Premium kerak.'); resultEl.innerHTML=''; return; }
+    const d = await r.json();
+    renderWordResult(d);
+  } catch(e) {
+    resultEl.innerHTML = '<div style="text-align:center;padding:40px;color:#ef4444;">⚠️ Xato yuz berdi</div>';
   }
 }
 
-function stopAIRecording(e) {
-  if (e) e.preventDefault();
-  if (!isRecording || !mediaRecorder) return;
-  mediaRecorder.stop();
-  isRecording = false;
-  document.getElementById('aiMicBtn').style.background = '#242430';
-  document.getElementById('aiMicBtn').style.borderColor = 'rgba(255,255,255,0.1)';
-  document.getElementById('aiMicLabel').textContent = 'Hold to Talk';
+function renderWordResult(d) {
+  const el = document.getElementById('vocab-result');
+  const levelColor = {A1:'#10b981',A2:'#10b981',B1:'#f59e0b',B2:'#f59e0b',C1:'#ef4444',C2:'#ef4444'}[d.level]||'#6366f1';
+  const examples = (d.examples||[]).slice(0,3).map(ex =>
+    `<li style="font-size:13px;color:#9ca3af;margin-bottom:6px;padding-left:8px;border-left:2px solid #374151;">${ex}</li>`
+  ).join('');
+
+  el.innerHTML = `
+    <div style="background:#1a1a2e;border:1px solid #374151;border-radius:16px;padding:20px;margin-bottom:14px;">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
+        <span style="font-size:22px;font-weight:800;color:#fff;">${d.word}</span>
+        <span style="background:${levelColor}20;color:${levelColor};border:1px solid ${levelColor};border-radius:20px;padding:2px 10px;font-size:12px;font-weight:700;">${d.level||'B1'}</span>
+      </div>
+      <p style="font-size:14px;color:#e2e8f0;margin:0 0 8px;font-weight:500;">${d.definition||''}</p>
+      <p style="font-size:13px;color:#f59e0b;margin:0 0 14px;">🇺🇿 ${d.translation_uz||''}</p>
+      ${examples ? `<ul style="margin:0 0 16px;padding:0;list-style:none;">${examples}</ul>` : ''}
+      <button onclick="openVocabChat('${d.word.replace(/'/g,"\\'")}','${(d.definition||'').replace(/'/g,"\\'")}')"
+        style="width:100%;padding:13px;background:#f59e0b;border:none;border-radius:12px;color:#fff;font-size:14px;font-weight:700;cursor:pointer;">
+        🤖 AI bilan muhokama qilish
+      </button>
+    </div>`;
+}
+
+function openVocabChat(word, definition) {
+  if (isUserLimited()) { showPremiumGate(); return; }
+  vchatWord = word;
+  vchatHistory = [];
+  document.getElementById('vchat-word-title').textContent = word;
+  document.getElementById('vchat-input').value = '';
+  const msgs = document.getElementById('vchat-messages');
+  msgs.innerHTML = `
+    <div style="background:#1e1e2e;border:1px solid #374151;border-radius:12px;padding:12px 14px;font-size:13px;color:#9ca3af;margin-bottom:4px;">
+      📖 <b style="color:#f59e0b">${word}</b> — ${definition}<br><br>
+      <span style="color:#6b7280;font-size:12px;">Quyida so'z haqida AI bilan inglizcha muhokama qiling. AI sizga ovozli javob beradi.</span>
+    </div>`;
+  navigateTo('screen-vocab-chat');
+  // Auto-send greeting
+  setTimeout(() => sendVocabChatMessage(`Tell me about the word "${word}" — its meaning, usage, and give me an interesting example.`), 300);
+}
+
+async function sendVocabChat() {
+  const input = document.getElementById('vchat-input');
+  const msg = input.value.trim();
+  if (!msg) return;
+  input.value = '';
+  sendVocabChatMessage(msg);
+}
+
+async function sendVocabChatMessage(msg) {
+  if (isUserLimited()) { showPremiumGate(); return; }
+
+  const msgs = document.getElementById('vchat-messages');
+  // Show user message (only if not auto-generated greeting)
+  if (!msg.startsWith('Tell me about the word')) {
+    msgs.innerHTML += `
+      <div style="display:flex;justify-content:flex-end;">
+        <div style="background:#6366f1;border-radius:14px 14px 2px 14px;padding:10px 14px;max-width:80%;font-size:14px;color:#fff;">${msg}</div>
+      </div>`;
+  }
+
+  // Typing indicator
+  const typingId = 'typing_' + Date.now();
+  msgs.innerHTML += `<div id="${typingId}" style="display:flex;align-items:center;gap:8px;"><div style="width:40px;height:40px;border-radius:50%;background:#f59e0b;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;">🤖</div><div style="background:#1e1e2e;border-radius:2px 14px 14px 14px;padding:10px 14px;color:#9ca3af;font-size:13px;">...</div></div>`;
+  msgs.scrollTop = msgs.scrollHeight;
+
+  document.getElementById('vchat-send-btn').disabled = true;
+
+  try {
+    const r = await fetch('/webapp/api/vocab-chat/', {
+      method: 'POST',
+      credentials: 'include',
+      headers: {'Content-Type':'application/json','X-CSRFToken':getCookie('csrftoken')},
+      body: JSON.stringify({word: vchatWord, message: msg, history: vchatHistory}),
+    });
+
+    if (r.status === 403) {
+      document.getElementById(typingId)?.remove();
+      showPremiumGate('AI xabar limitingiz tugadi. Premium oling!');
+      // Reload profile to update cache
+      const pr = await fetch('/api/users/profile/',{credentials:'include'});
+      if(pr.ok) userProfile = await pr.json();
+      return;
+    }
+
+    const d = await r.json();
+    vchatHistory.push({role:'user',content:msg});
+    vchatHistory.push({role:'assistant',content:d.text});
+
+    // Replace typing with AI message
+    const typingEl = document.getElementById(typingId);
+    if (typingEl) {
+      typingEl.outerHTML = `
+        <div style="display:flex;align-items:flex-start;gap:8px;">
+          <div style="width:40px;height:40px;border-radius:50%;background:#f59e0b;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;">🤖</div>
+          <div style="background:#1e1e2e;border:1px solid #374151;border-radius:2px 14px 14px 14px;padding:10px 14px;max-width:80%;font-size:14px;color:#e2e8f0;line-height:1.5;">${d.text}</div>
+        </div>`;
+    }
+    msgs.scrollTop = msgs.scrollHeight;
+
+    // Play audio if available
+    if (d.audio) {
+      if (vchatAudio) vchatAudio.pause();
+      vchatAudio = new Audio('data:audio/mp3;base64,' + d.audio);
+      vchatAudio.play().catch(()=>{});
+    }
+
+    // Update profile cache (message count increased)
+    if (userProfile) userProfile.ai_message_count = (userProfile.ai_message_count||0) + 1;
+    if (isUserLimited()) document.getElementById('user-limit-badge').style.display = 'block';
+
+  } catch(e) {
+    document.getElementById(typingId)?.remove();
+    window.showToast('Xato yuz berdi', 'error');
+  } finally {
+    document.getElementById('vchat-send-btn').disabled = false;
+  }
+}
+
+async function loadRecentCalls() {
+  try {
+    const r = await fetch('/api/chat/rooms/', {credentials:'include'});
+    const data = await r.json();
+    const rooms = Array.isArray(data) ? data : (data.results || []);
+    renderRecentCalls(rooms.slice(0,5));
+  } catch(e) {
+    document.getElementById('recent-calls').innerHTML = '<div style="text-align:center;padding:16px;color:#6b7280;font-size:13px;">Ma\'lumot yo\'q</div>';
+  }
+}
+
+function renderRecentCalls(rooms) {
+  const el = document.getElementById('recent-calls');
+  if (!rooms.length) {
+    el.innerHTML = '<div style="text-align:center;padding:16px;color:#6b7280;font-size:13px;">Hali suhbat yo\'q</div>';
+    return;
+  }
+  const myUser = '{{ request.user.username }}';
+  el.innerHTML = rooms.map(r => {
+    const partner = r.user1_name === myUser ? r.user2_name : r.user1_name;
+    const date = new Date(r.started_at).toLocaleDateString('uz-UZ',{month:'short',day:'numeric'});
+    const dur = r.duration_seconds ? `${Math.floor(r.duration_seconds/60)}:${String(r.duration_seconds%60).padStart(2,'0')}` : '—';
+    return `
+    <div style="background:#1a1a2e;border:1px solid #374151;border-radius:12px;padding:12px 14px;display:flex;align-items:center;gap:12px;margin-bottom:8px;">
+      <div style="width:40px;height:40px;border-radius:50%;background:#374151;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700;color:#fff;flex-shrink:0;">${partner[0].toUpperCase()}</div>
+      <div style="flex:1;">
+        <div style="font-size:14px;font-weight:600;color:#fff;">${partner}</div>
+        <div style="font-size:12px;color:#9ca3af;">${date} · ${dur}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function selectGender(g) {
+  selectedGender = g;
+  ['male','female'].forEach(gender => {
+    const btn = document.getElementById(`btn-${gender}`);
+    btn.style.background = gender===g ? '#6366f1' : 'transparent';
+    btn.style.color = gender===g ? '#fff' : '#9ca3af';
+    btn.style.borderColor = gender===g ? '#6366f1' : '#374151';
+  });
+}
+
+async function startAIChat() {
+  const p = AI_PROFILES[selectedGender];
+  document.getElementById('ai-coach-name').textContent = p.name;
+  const av = document.getElementById('ai-avatar');
+  av.textContent = p.emoji;
+  av.style.background = p.color;
+  document.getElementById('ai-avatar-ring').style.borderColor = p.color;
+  document.getElementById('ai-call-timer').textContent = '0:00';
+  document.getElementById('ai-mic-status').textContent = '';
+  navigateTo('screen-ai-call');
+  callSeconds = 0;
+  callTimer = setInterval(()=>{ callSeconds++; document.getElementById('ai-call-timer').textContent = fmt(callSeconds); }, 1000);
+  try {
+    const r = await fetch('/webapp/ws-token/',{method:'POST',credentials:'include',headers:{'X-CSRFToken':getCookie('csrftoken')}});
+    const {token} = await r.json();
+    const proto = location.protocol==='https:'?'wss':'ws';
+    wsAI = new WebSocket(`${proto}://${location.host}/ws/ai-call/?token=${token}&gender=${selectedGender}`);
+    wsAI.onopen = () => { document.getElementById('ai-mic-status').textContent = '🎙 Gapiring...'; };
+  } catch(e){}
 }
 
 function endAICall() {
-  clearInterval(aiIntervalId);
-  window._inCall = false;
-  if (aiSocket) {
-    try { aiSocket.send(JSON.stringify({ type: 'end' })); } catch {}
-    aiSocket.close();
-    aiSocket = null;
+  clearInterval(callTimer);
+  if(wsAI){wsAI.close();wsAI=null;}
+  screenStack = ['screen-main'];
+  history.replaceState({screen:'screen-main'},'','');
+  showScreen('screen-main');
+  loadRecentCalls();
+}
+
+function toggleAIMute() {
+  aiMuted=!aiMuted;
+  const btn=document.getElementById('ai-mute-btn');
+  btn.textContent=aiMuted?'🔇':'🔊';
+  btn.style.background=aiMuted?'#ef444430':'#2a2a3e';
+  document.getElementById('ai-mic-status').textContent=aiMuted?'Microphone muted':'🎙 Gapiring...';
+  if(wsAI&&wsAI.readyState===1) wsAI.send(JSON.stringify({type:aiMuted?'mute':'unmute'}));
+}
+
+async function startPartnerSearch() {
+  navigateTo('screen-searching');
+  searchSeconds=0;
+  searchTimer=setInterval(()=>{ searchSeconds++; document.getElementById('search-timer').textContent=fmt(searchSeconds); },1000);
+  try {
+    const r = await fetch('/webapp/ws-token/',{method:'POST',credentials:'include',headers:{'X-CSRFToken':getCookie('csrftoken')}});
+    const {token} = await r.json();
+    const proto=location.protocol==='https:'?'wss':'ws';
+    wsMatch=new WebSocket(`${proto}://${location.host}/ws/voice-match/?token=${token}`);
+    wsMatch.onmessage=(e)=>{ const d=JSON.parse(e.data); if(d.type==='match_found'){clearInterval(searchTimer);startCall(d);} };
+    wsMatch.onclose=()=>clearInterval(searchTimer);
+  } catch(e){cancelSearch();}
+}
+
+function cancelSearch() {
+  clearInterval(searchTimer);
+  if(wsMatch){wsMatch.close();wsMatch=null;}
+  goBack();
+}
+
+async function startCall(matchData) {
+  currentRoomId=matchData.room_id;
+  currentPartnerId=matchData.partner_id;
+  currentPartnerName=matchData.partner_name||'Partner';
+  document.getElementById('partner-avatar').textContent=currentPartnerName[0].toUpperCase();
+  document.getElementById('partner-name').textContent=currentPartnerName;
+  document.getElementById('call-timer').textContent='0:00';
+  document.getElementById('call-mic-status').textContent='🎙 Gapiring...';
+  navigateTo('screen-call');
+  callSeconds=0;
+  callTimer=setInterval(()=>{ callSeconds++; document.getElementById('call-timer').textContent=fmt(callSeconds); },1000);
+  try {
+    const r=await fetch('/webapp/ws-token/',{method:'POST',credentials:'include',headers:{'X-CSRFToken':getCookie('csrftoken')}});
+    const {token}=await r.json();
+    const proto=location.protocol==='https:'?'wss':'ws';
+    wsCall=new WebSocket(`${proto}://${location.host}/ws/voice-call/${currentRoomId}/?token=${token}`);
+    wsCall.onmessage=(e)=>{ const d=JSON.parse(e.data); if(d.type==='call_ended') endCall(); };
+  } catch(e){}
+}
+
+async function endCall() {
+  clearInterval(callTimer);
+  if(wsCall){wsCall.close();wsCall=null;}
+  if(currentRoomId) {
+    try { await fetch(`/api/chat/rooms/${currentRoomId}/end/`,{method:'POST',credentials:'include',headers:{'X-CSRFToken':getCookie('csrftoken')}}); } catch(e){}
   }
-  document.getElementById('aiCallPanel').classList.add('hidden');
-  location.reload();
+  showRatingModal();
 }
 
-// ── Rating ────────────────────────────
-function openRating(roomId) {
-  ratingRoomId = roomId;
-  selectedRating = 0;
-  document.querySelectorAll('#starRow button').forEach(b => {
-    b.textContent = '☆';
-    b.style.color = '#374151';
-  });
-  document.getElementById('ratingComment').value = '';
-  document.getElementById('ratingModal').classList.remove('hidden');
+function toggleCallMute() {
+  callMuted=!callMuted;
+  const btn=document.getElementById('call-mute-btn');
+  btn.textContent=callMuted?'🔇':'🔊';
+  btn.style.background=callMuted?'#ef444430':'#2a2a3e';
+  document.getElementById('call-mic-status').textContent=callMuted?'Microphone muted':'🎙 Gapiring...';
+  if(wsCall&&wsCall.readyState===1) wsCall.send(JSON.stringify({type:callMuted?'mute':'unmute'}));
 }
 
-function setRating(n) {
-  selectedRating = n;
-  document.querySelectorAll('#starRow button').forEach((b, i) => {
-    b.textContent = i < n ? '★' : '☆';
-    b.style.color = i < n ? '#f59e0b' : '#374151';
-  });
+function showRatingModal() {
+  selectedRating=0;
+  document.querySelectorAll('.star').forEach(s=>s.style.opacity='0.3');
+  document.getElementById('rate-comment').value='';
+  document.getElementById('rate-avatar').textContent=currentPartnerName[0].toUpperCase();
+  document.getElementById('rate-partner-name').textContent=currentPartnerName;
+  document.getElementById('rating-modal').style.display='flex';
+}
+
+function selectStar(val) {
+  selectedRating=val;
+  document.querySelectorAll('.star').forEach(s=>{ s.style.opacity=parseInt(s.dataset.val)<=val?'1':'0.3'; });
 }
 
 async function submitRating() {
-  if (!selectedRating) { showToast('Please select a rating', 'error'); return; }
-  const comment = document.getElementById('ratingComment').value.trim();
+  if(!selectedRating){ window.showToast('Kamida 1 yulduz bering!','error'); return; }
   try {
-    const r = await fetch(`/webapp/speaking/rate/${ratingRoomId}/`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrf() },
-      body: JSON.stringify({ rating: selectedRating, comment }),
-      credentials: 'same-origin',
+    await fetch(`/webapp/speaking/rate/${currentRoomId}/`,{
+      method:'POST', credentials:'include',
+      headers:{'X-CSRFToken':getCookie('csrftoken'),'Content-Type':'application/json'},
+      body:JSON.stringify({rating:selectedRating, comment:document.getElementById('rate-comment').value.trim(), rated_user_id:currentPartnerId})
     });
-    const d = await r.json();
-    if (d.ok) {
-      showToast('Rating submitted!', 'success');
-      document.getElementById('ratingModal').classList.add('hidden');
-      location.reload();
-    } else {
-      showToast(d.error || 'Error', 'error');
-    }
-  } catch {
-    showToast('Error submitting rating', 'error');
-  }
+  } catch(e){}
+  closeRatingModal();
 }
 
-function skipRating() {
-  document.getElementById('ratingModal').classList.add('hidden');
-  location.reload();
+function skipRating() { closeRatingModal(); }
+
+function closeRatingModal() {
+  document.getElementById('rating-modal').style.display='none';
+  currentRoomId=null; currentPartnerId=null;
+  screenStack = ['screen-main'];
+  history.replaceState({screen:'screen-main'},'','');
+  showScreen('screen-main');
+  loadRecentCalls();
 }
 
-// ── Helper ────────────────────────────
-function formatTime(secs) {
-  const m = Math.floor(secs / 60);
-  const s = secs % 60;
-  return `${m}:${s.toString().padStart(2, '0')}`;
-}
+function fmt(sec) { return `${Math.floor(sec/60)}:${String(sec%60).padStart(2,'0')}`; }
+function getCookie(n) { const v=`; ${document.cookie}`;const p=v.split(`; ${n}=`);if(p.length===2)return p.pop().split(';').shift();return ''; }
 </script>
 {% endblock %}

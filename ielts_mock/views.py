@@ -3,7 +3,7 @@ import random
 from rest_framework import generics
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated,AllowAny
 from django.utils import timezone
 from django.conf import settings
 from openai import OpenAI
@@ -121,48 +121,25 @@ class MyIELTSSessionsView(generics.ListAPIView):
     def get_queryset(self):
         return IELTSSession.objects.filter(user=self.request.user, is_completed=True)
 
-
 class BotIELTSQuestionsView(APIView):
-    """Bot uchun: random IELTS savollar — Part 3 Part 2 ga bog'liq (BOT_SECRET)"""
-    permission_classes = []
+    permission_classes = [AllowAny]
 
     def get(self, request):
         secret = request.headers.get("X-Bot-Secret", "")
         if secret != settings.BOT_SECRET:
-            return Response({"error": "Forbidden"}, status=403)
+            return Response({'error': 'Unauthorized'}, status=403)
 
-        p1 = list(IELTSQuestion.objects.filter(part=1, is_active=True))
-        p2 = list(IELTSQuestion.objects.filter(part=2, is_active=True))
+        questions = IELTSQuestion.objects.filter(is_active=True).select_related('related_part2')
 
-        if not p1 or not p2:
-            return Response({"questions": []})
+        result = []
+        for q in questions:
+            result.append({
+                'id': q.id,
+                'part': q.part,
+                'question': q.question,
+                'is_intro': q.is_intro,
+                'cue_card_points': q.cue_card_points or [],
+                'related_part2': q.related_part2_id,
+            })
 
-        part1_selected = random.sample(p1, min(3, len(p1)))
-        part2_q = random.choice(p2)
-
-        part3_related = list(part2_q.part3_follow_up.filter(is_active=True))
-        if not part3_related:
-            part3_related = list(
-                IELTSQuestion.objects.filter(
-                    part=3, is_active=True, related_part2__isnull=True
-                )
-            )
-        if not part3_related:
-            part3_related = list(IELTSQuestion.objects.filter(part=3, is_active=True))
-
-        if not part3_related:
-            return Response({"questions": []})
-
-        part3_selected = random.sample(part3_related, min(3, len(part3_related)))
-
-        selected = part1_selected + [part2_q] + part3_selected
-        data = [
-            {
-                "id": q.id,
-                "part": q.part,
-                "question": q.question,
-                "cue_card_points": q.cue_card_points or [],
-            }
-            for q in selected
-        ]
-        return Response({"questions": data})
+        return Response({'questions': result})

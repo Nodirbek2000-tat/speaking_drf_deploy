@@ -1,6 +1,9 @@
 import json
+import logging
 from datetime import timedelta, date
 from functools import wraps
+
+logger = logging.getLogger(__name__)
 
 from django.conf import settings
 from django.contrib.auth import login, logout
@@ -30,49 +33,83 @@ def webapp_login_required(view_func):
 
 def index(request):
     """Entry point — shows login/loading page for Telegram WebApp auth"""
-    if request.user.is_authenticated:
+    # Faqat Telegram orqali autentifikatsiya qilingan userlarni o'tkazish.
+    # Superuser yoki admin session bo'lsa — qayta Telegram auth qilinsin.
+    user = request.user
+    if user.is_authenticated and getattr(user, 'telegram_id', None):
         return redirect('/webapp/home/')
+    # Eski session ni tozalash (masalan admin session qolgan bo'lsa)
+    if user.is_authenticated and not getattr(user, 'telegram_id', None):
+        logout(request)
     return render(request, 'webapp/index.html', {'debug': settings.DEBUG})
 
 
 @csrf_exempt
 def auth_view(request):
     """Verify Telegram WebApp initData and login user"""
-    if request.method == 'POST':
-        try:
-            body = json.loads(request.body)
-            init_data = body.get('initData', '')
-        except Exception:
-            init_data = request.POST.get('initData', '')
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST required'}, status=405)
 
-        bot_token = getattr(settings, 'TELEGRAM_BOT_TOKEN', '')
+    try:
+        body = json.loads(request.body)
+        init_data = body.get('initData', '')
+    except Exception:
+        init_data = request.POST.get('initData', '')
 
-        # In development, allow bypass with test data
-        if settings.DEBUG and init_data == 'test':
-            from users.models import User
-            user = User.objects.filter(is_superuser=True).first()
-            if user:
-                user.backend = 'django.contrib.auth.backends.ModelBackend'
-                login(request, user)
-                return JsonResponse({'ok': True, 'redirect': '/webapp/home/'})
-            return JsonResponse({'ok': False, 'error': 'No superuser found'}, status=401)
+    bot_token = getattr(settings, 'TELEGRAM_BOT_TOKEN', '')
 
-        user_data = verify_telegram_webapp(init_data, bot_token)
-        if not user_data:
-            return JsonResponse({'ok': False, 'error': 'Invalid initData'}, status=401)
-
-        user, created = get_or_create_webapp_user(user_data)
-        if not user:
-            return JsonResponse({'ok': False, 'error': 'Failed to create user'}, status=500)
-
+    # Debug rejimda test login (faqat dev uchun, superuser EMAS — real Telegram user)
+    if settings.DEBUG and init_data == 'test':
+        # Superuser o'rniga test Telegram user yaratamiz
+        from users.models import User
+        test_tg_id = 999999999  # Test telegram_id
+        user, created = User.objects.get_or_create(
+            telegram_id=test_tg_id,
+            defaults={
+                'username': 'test_webapp_user',
+                'first_name': 'Test',
+                'last_name': 'User',
+            }
+        )
+        logout(request)  # Eski sessionni tozalash
         user.backend = 'django.contrib.auth.backends.ModelBackend'
         login(request, user)
-        # Go to setup if new user OR if first_name not set yet
-        needs_setup = created or not user.first_name
-        redirect_url = '/webapp/setup/' if needs_setup else '/webapp/home/'
-        return JsonResponse({'ok': True, 'redirect': redirect_url, 'created': created})
+        return JsonResponse({'ok': True, 'redirect': '/webapp/home/', 'created': created})
 
-    return JsonResponse({'error': 'POST required'}, status=405)
+    # Real Telegram WebApp auth
+    user_data = verify_telegram_webapp(init_data, bot_token)
+    if not user_data:
+        logger.warning(
+            f"[WebApp Auth] FAILED — token_ok={bool(bot_token)}, "
+            f"initData_len={len(init_data)}, initData_preview={init_data[:80]!r}"
+        )
+        if settings.DEBUG:
+            return JsonResponse({
+                'ok': False,
+                'error': 'Invalid initData',
+                'debug': {
+                    'token_present': bool(bot_token),
+                    'initData_len': len(init_data),
+                    'initData_preview': init_data[:100],
+                }
+            }, status=401)
+        return JsonResponse({'ok': False, 'error': 'Invalid initData'}, status=401)
+
+    user, created = get_or_create_webapp_user(user_data)
+    if not user:
+        return JsonResponse({'ok': False, 'error': 'Failed to create user'}, status=500)
+
+    logger.info(f"[WebApp Auth] OK — user={user.id} ({user.username}), telegram_id={user.telegram_id}, created={created}")
+
+    # Eski sessionni tozalab yangi user bilan login qilish
+    logout(request)
+    user.backend = 'django.contrib.auth.backends.ModelBackend'
+    login(request, user)
+
+    # Yangi user yoki ism yo'q bo'lsa → setup sahifasiga
+    needs_setup = created or not user.first_name
+    redirect_url = '/webapp/setup/' if needs_setup else '/webapp/home/'
+    return JsonResponse({'ok': True, 'redirect': redirect_url, 'created': created})
 
 
 def logout_view(request):
@@ -272,7 +309,7 @@ def speaking(request):
             'has_rated': VoiceRating.objects.filter(room=room, rater=user).exists(),
         })
 
-    return render(request, 'webapp/speaking.html', {
+    return render(request, 'webapp/speaking-1.html', {
         'user': user,
         'can_call': can_call,
         'free_calls_left': free_calls_left,
@@ -476,9 +513,17 @@ def premium(request):
     referrals_needed = settings_obj.referrals_for_premium
     premium_days = settings_obj.referral_premium_days
 
+    features = [
+        'Cheksiz speaking qo\'ng\'iroqlari',
+        'Batafsil progress tahlili (AI)',
+        'Barcha practice stsenariylari',
+        'IELTS & CEFR mock testlar (cheksiz)',
+        'Kunlik hisobot va daily plan',
+        'Do\'st bilan ustuvor juftlash',
+    ]
+
     return render(request, 'webapp/premium.html', {
         'user': user,
-        'plans': plans,
         'card': card,
         'ref_count': ref_count,
         'ref_premium_count': ref_premium_count,
@@ -487,6 +532,7 @@ def premium(request):
         'premium_days': premium_days,
         'is_premium': user.has_premium_active,
         'premium_expires': user.premium_expires,
+        'features': features,
     })
 
 
@@ -574,7 +620,7 @@ def _check_bot_secret(request):
 
 @webapp_login_required
 def progress(request):
-    """Progress page with charts"""
+    """Progress page with charts and AI daily plan"""
     from ielts_mock.models import IELTSSession
     from cefr_mock.models import CEFRSession
     from practice.models import PracticeSession
@@ -583,33 +629,109 @@ def progress(request):
 
     ielts_sessions = list(IELTSSession.objects.filter(
         user=user, is_completed=True
-    ).order_by('started_at').values('overall_band', 'started_at'))
+    ).order_by('started_at').values('overall_band', 'sub_scores', 'started_at'))
 
     cefr_sessions = list(CEFRSession.objects.filter(
         user=user, is_completed=True
-    ).order_by('started_at').values('score', 'level', 'started_at'))
+    ).order_by('started_at').values('score', 'level', 'feedback', 'started_at'))
 
-    practice_sessions = list(PracticeSession.objects.filter(
+    practice_sessions_qs = PracticeSession.objects.filter(
         user=user, is_completed=True
-    ).order_by('started_at').values('overall_score', 'started_at', 'scenario__title'))
+    ).order_by('started_at')
+
+    practice_sessions = list(practice_sessions_qs.values(
+        'overall_score', 'grammar_score', 'vocab_score', 'fluency_score',
+        'started_at', 'scenario__title'
+    ))
 
     voice_rooms = VoiceRoom.objects.filter(
         Q(user1=user) | Q(user2=user), status='ended'
     ).count()
 
     # Format dates for JS charts
-    ielts_data = [
-        {'band': float(s['overall_band'] or 0), 'date': s['started_at'].strftime('%d/%m')}
-        for s in ielts_sessions if s['overall_band']
-    ]
-    cefr_data = [
-        {'score': s['score'] or 0, 'level': s['level'] or '', 'date': s['started_at'].strftime('%d/%m')}
-        for s in cefr_sessions if s['score']
-    ]
+    ielts_data = []
+    for s in ielts_sessions:
+        if not s['overall_band']:
+            continue
+        sub = s.get('sub_scores') or {}
+        ielts_data.append({
+            'band': float(s['overall_band']),
+            'fluency': float(sub.get('fluency') or 0),
+            'lexical': float(sub.get('lexical') or 0),
+            'grammar': float(sub.get('grammar') or 0),
+            'p1': float(sub.get('part1_band') or 0),
+            'p2': float(sub.get('part2_band') or 0),
+            'p3': float(sub.get('part3_band') or 0),
+            'date': s['started_at'].strftime('%d/%m'),
+        })
+
+    cefr_data = []
+    for s in cefr_sessions:
+        if not s['score']:
+            continue
+        fb = s.get('feedback') or {}
+        part_scores = fb.get('part_scores') or {}
+        cefr_data.append({
+            'score': s['score'],
+            'level': s['level'] or '',
+            'fluency': float(fb.get('fluency') or 0),
+            'accuracy': float(fb.get('accuracy') or 0),
+            'p1': int(part_scores.get('part1') or 0),
+            'p2': int(part_scores.get('part2') or 0),
+            'p3': int(part_scores.get('part3') or 0),
+            'p4': int(part_scores.get('part4') or 0),
+            'date': s['started_at'].strftime('%d/%m'),
+        })
     practice_data = [
-        {'score': s['overall_score'] or 0, 'title': s['scenario__title'] or '', 'date': s['started_at'].strftime('%d/%m')}
+        {
+            'score': s['overall_score'] or 0,
+            'grammar': s['grammar_score'] or 0,
+            'vocab': s['vocab_score'] or 0,
+            'fluency': s['fluency_score'] or 0,
+            'title': s['scenario__title'] or '',
+            'date': s['started_at'].strftime('%d/%m'),
+        }
         for s in practice_sessions if s['overall_score']
     ]
+
+    # Average scores from analyzed practice sessions
+    analyzed = [s for s in practice_sessions if s['overall_score']]
+    avg_score = round(sum(s['overall_score'] for s in analyzed) / len(analyzed)) if analyzed else 0
+    avg_grammar = round(sum((s['grammar_score'] or 0) for s in analyzed) / len(analyzed)) if analyzed else 0
+    avg_vocab = round(sum((s['vocab_score'] or 0) for s in analyzed) / len(analyzed)) if analyzed else 0
+    avg_fluency = round(sum((s['fluency_score'] or 0) for s in analyzed) / len(analyzed)) if analyzed else 0
+
+    # Trend: compare last 3 vs previous 3
+    score_trend = 0
+    if len(practice_data) >= 4:
+        recent = [s['score'] for s in practice_data[-3:]]
+        older = [s['score'] for s in practice_data[-6:-3]]
+        if older:
+            score_trend = round(sum(recent) / len(recent) - sum(older) / len(older))
+
+    # Daily plan from last analyzed practice session
+    last_analyzed = PracticeSession.objects.filter(
+        user=user, is_completed=True, analysis_done=True
+    ).order_by('-started_at').first()
+
+    daily_plan = []
+    critical_thinking = ''
+    if last_analyzed and last_analyzed.ai_feedback:
+        fb = last_analyzed.ai_feedback
+        daily_plan = fb.get('daily_plan') or []
+        critical_thinking = fb.get('critical_thinking') or ''
+
+    # Trigger analysis for any unanalyzed completed sessions (background)
+    unanalyzed_ids = list(PracticeSession.objects.filter(
+        user=user, is_completed=True, analysis_done=False
+    ).values_list('id', flat=True)[:5])
+    if unanalyzed_ids:
+        try:
+            from .tasks import analyze_practice_session
+            for sid in unanalyzed_ids:
+                analyze_practice_session.delay(sid)
+        except Exception:
+            pass
 
     return render(request, 'webapp/progress.html', {
         'user': user,
@@ -620,13 +742,19 @@ def progress(request):
         'ielts_count': len(ielts_data),
         'cefr_count': len(cefr_data),
         'practice_count': len(practice_data),
+        'avg_score': avg_score,
+        'avg_grammar': avg_grammar,
+        'avg_vocab': avg_vocab,
+        'avg_fluency': avg_fluency,
+        'score_trend': score_trend,
+        'daily_plan': json.dumps(daily_plan),
+        'critical_thinking': critical_thinking,
         'is_premium': user.has_premium_active,
     })
 
-
 @webapp_login_required
 def my_problems_ai(request):
-    """Get AI analysis of user's problems"""
+    """AI sizning barcha natijalaringizni tahlil qiladi"""
     user = request.user
     if not user.has_premium_active:
         return JsonResponse({'error': 'Premium talab qilinadi'}, status=403)
@@ -636,46 +764,96 @@ def my_problems_ai(request):
     from practice.models import PracticeSession
     import openai
 
+    # Oxirgi natijalarni yig'ish
     ielts_sessions = list(IELTSSession.objects.filter(
         user=user, is_completed=True
-    ).order_by('-started_at')[:3].values('overall_band', 'sub_scores', 'mistakes', 'improvements'))
+    ).order_by('-started_at')[:3].values(
+        'overall_band', 'sub_scores', 'mistakes', 'improvements'
+    ))
 
     cefr_sessions = list(CEFRSession.objects.filter(
         user=user, is_completed=True
     ).order_by('-started_at')[:3].values('score', 'level', 'feedback'))
 
-    feedbacks = list(VoiceRating.objects.filter(
-        rated_user=user
-    ).order_by('-created_at')[:10].values('rating', 'comment'))
+    # Practice tense statistikasi
+    practice_sessions = list(PracticeSession.objects.filter(
+        user=user, is_completed=True, analysis_done=True
+    ).order_by('-started_at')[:5].values(
+        'overall_score', 'grammar_score', 'vocab_score',
+        'fluency_score', 'tense_stats', 'ai_feedback'
+    ))
 
-    prompt = f"""
-Analyze this English learner's performance data and give specific advice in Uzbek:
+    # Partner feedbacklari
+    feedbacks = list(user.received_voice_ratings.order_by(
+        '-created_at'
+    )[:10].values('rating', 'comment'))
+
+    # Tenses umumiy statistikasi
+    tense_totals = {}
+    for ps in practice_sessions:
+        ts = ps.get('tense_stats') or {}
+        for tname, tdata in ts.items():
+            if tname not in tense_totals:
+                tense_totals[tname] = {'total': 0, 'correct': 0}
+            if isinstance(tdata, dict):
+                tense_totals[tname]['total'] += tdata.get('total', 0)
+                tense_totals[tname]['correct'] += tdata.get('correct', 0)
+
+    # Eng zaif tenses
+    weak_tenses = []
+    for tname, td in tense_totals.items():
+        if td['total'] > 0:
+            pct = round(td['correct'] / td['total'] * 100)
+            if pct < 70:
+                weak_tenses.append(f"{tname}: {pct}%")
+
+    prompt = f"""Analyze this English learner's performance and give advice in Uzbek language.
 
 IELTS Results (last 3): {json.dumps(ielts_sessions, default=str)}
 CEFR Results (last 3): {json.dumps(cefr_sessions, default=str)}
-Partner Feedback (last 10): {json.dumps(feedbacks, default=str)}
+Practice Sessions (last 5): {json.dumps(practice_sessions, default=str)}
+Partner Feedback: {json.dumps(feedbacks, default=str)}
+Weak Tenses: {weak_tenses}
 
-Give:
-1. Top 3 specific problems (vocabulary/grammar/pronunciation/fluency)
-2. Specific exercises to fix each problem
-3. Estimated time to improve
-
-Be specific and actionable. Format as JSON with keys: problems (list), exercises (list), timeline (string).
-"""
+Return ONLY valid JSON:
+{{
+  "problems": [
+    "Grammar: Past Perfect ni noto'g'ri ishlatish",
+    "Vocabulary: Academic so'zlar kamligi",
+    "Fluency: Ko'p to'xtab qolish"
+  ],
+  "exercises": [
+    "Har kuni 10 ta Past Perfect jumla yozing",
+    "Kuniga 5 ta yangi academic so'z o'rganing",
+    "Mirror oldida 2 daqiqa to'xtovsiz gapiring"
+  ],
+  "timeline": "Bu muammolarni 4-6 haftada yaxshilash mumkin",
+  "critical_thinking": "Sizning javoblaringizda asosiy fikrni qo'llab-quvvatlash uchun misollar kamlik qiladi. Har bir fikringizni 'For example...' yoki 'In my experience...' bilan kengaytiring.",
+  "strengths": [
+    "Pronunciation aniq va tushunarli",
+    "Basic grammar yaxshi"
+  ],
+  "overall_advice": "Eng muhim jihat — tenses va vocabulary. Kuniga 20 daqiqa shu ikki sohaga e'tibor bering."
+}}"""
 
     try:
         client = openai.OpenAI(api_key=settings.OPENAI_API_KEY)
         response = client.chat.completions.create(
             model='gpt-4o-mini',
-            messages=[{'role': 'user', 'content': prompt}],
+            messages=[
+                {
+                    'role': 'system',
+                    'content': 'You are an expert English language coach. Analyze learner data and provide specific, actionable advice in Uzbek language.'
+                },
+                {'role': 'user', 'content': prompt}
+            ],
             response_format={'type': 'json_object'},
+            max_tokens=1000,
         )
         result = json.loads(response.choices[0].message.content)
         return JsonResponse({'ok': True, 'analysis': result})
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=500)
-
-
 # ─── Bot Admin API ────────────────────────────────────────────────────────────
 
 @csrf_exempt
@@ -788,19 +966,29 @@ def bot_api_grant_premium(request):
     data = json.loads(request.body)
     telegram_id = data.get('telegram_id')
     days = int(data.get('days', 30))
+    full_name = data.get('full_name', '')
+    username = data.get('username', '') or f'tg_{telegram_id}'
 
-    try:
-        user = User.objects.get(telegram_id=telegram_id)
-        user.is_premium = True
-        user.premium_expires = timezone.now() + timedelta(days=days)
-        user.save(update_fields=['is_premium', 'premium_expires'])
-        return JsonResponse({
-            'ok': True,
-            'username': user.username,
-            'expires': user.premium_expires.isoformat(),
-        })
-    except User.DoesNotExist:
-        return JsonResponse({'error': 'User not found'}, status=404)
+    if not telegram_id:
+        return JsonResponse({'error': 'telegram_id required'}, status=400)
+
+    user, created = User.objects.get_or_create(
+        telegram_id=telegram_id,
+        defaults={
+            'username': username,
+            'first_name': full_name.split()[0] if full_name else '',
+            'last_name': ' '.join(full_name.split()[1:]) if full_name and len(full_name.split()) > 1 else '',
+        }
+    )
+    user.is_premium = True
+    user.premium_expires = timezone.now() + timedelta(days=days)
+    user.save(update_fields=['is_premium', 'premium_expires'])
+    return JsonResponse({
+        'ok': True,
+        'username': user.username,
+        'expires': user.premium_expires.isoformat(),
+        'created': created,
+    })
 
 
 @csrf_exempt
@@ -947,3 +1135,343 @@ def bot_api_premium_request(request):
         'plan_name': plan.name,
         'price_uzs': plan.price_uzs,
     })
+
+
+@csrf_exempt
+def bot_api_leaderboard(request):
+    """Bot va Web: leaderboard top 30 + my_rank"""
+    # Bot yoki login user — ikkalasi ham ko'ra oladi
+    is_bot = _check_bot_secret(request)
+    if not is_bot and not request.user.is_authenticated:
+        return JsonResponse({'error': 'Unauthorized'}, status=401)
+
+    from users.models import User
+    from django.db.models import Avg, Count, Q, F, ExpressionWrapper, IntegerField
+
+    sort_by = request.GET.get('sort_by', request.GET.get('sort', 'chat_count'))
+    limit = min(int(request.GET.get('limit', 30)), 50)
+
+    ALLOWED = ['chat_count', 'practice_count', 'ielts_count', 'cefr_count']
+    if sort_by not in ALLOWED:
+        sort_by = 'chat_count'
+
+    # Barcha userlarni sort qilib olish
+    qs = User.objects.filter(
+        is_active=True,
+        **{f'{sort_by}__gt': 0}
+    ).annotate(
+        avg_voice_rating=Avg('received_voice_ratings__rating'),
+    ).order_by(f'-{sort_by}')
+
+    all_ranked = list(qs)
+
+    def user_to_dict(u, rank):
+        avg = round(u.avg_voice_rating, 1) if u.avg_voice_rating else None
+        photo_url = getattr(u, 'telegram_photo_url', None) or None
+        return {
+            'rank': rank,
+            'id': u.id,
+            'full_name': f"{u.first_name} {u.last_name}".strip() or u.username,
+            'username': u.username or '',
+            'photo_url': photo_url,
+            'is_premium': getattr(u, 'has_premium_active', u.is_premium),
+            'chat_count': u.chat_count or 0,
+            'practice_count': u.practice_count or 0,
+            'ielts_count': u.ielts_count or 0,
+            'cefr_count': u.cefr_count or 0,
+            'avg_rating': avg,
+        }
+
+    leaders_list = [user_to_dict(u, i + 1) for i, u in enumerate(all_ranked[:limit])]
+
+    # My rank (faqat login user uchun)
+    my_rank = None
+    if request.user.is_authenticated:
+        for i, u in enumerate(all_ranked):
+            if u.id == request.user.id:
+                my_rank = user_to_dict(u, i + 1)
+                break
+
+    return JsonResponse({
+        'leaders': leaders_list,
+        'leaderboard': leaders_list,  # bot eski formatni kutsa ham ishlaydi
+        'my_rank': my_rank,
+        'sort_by': sort_by,
+        'total': len(leaders_list),
+    })
+
+
+@csrf_exempt
+def bot_api_save_phone(request):
+    """Bot: foydalanuvchi telefon raqamini saqlash"""
+    if not _check_bot_secret(request):
+        return JsonResponse({'error': 'Unauthorized'}, status=401)
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST required'}, status=405)
+
+    from users.models import User
+    data = json.loads(request.body)
+    telegram_id = data.get('telegram_id')
+    phone = data.get('phone', '').strip()
+
+    if not telegram_id or not phone:
+        return JsonResponse({'error': 'telegram_id and phone required'}, status=400)
+
+    updated = User.objects.filter(telegram_id=telegram_id).update(phone_number=phone)
+    if not updated:
+        return JsonResponse({'error': 'User not found'}, status=404)
+
+    return JsonResponse({'ok': True, 'phone': phone})
+
+
+@csrf_exempt
+def bot_api_save_ielts(request):
+    """Bot: IELTS natijasini DRF ga saqlash + Celery deep analysis trigger"""
+    if not _check_bot_secret(request):
+        return JsonResponse({'error': 'Unauthorized'}, status=401)
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST required'}, status=405)
+
+    from ielts_mock.models import IELTSSession
+    from users.models import User
+    from django.utils import timezone
+
+    data = json.loads(request.body)
+    telegram_id = data.get('telegram_id')
+    band = data.get('band')
+    sub_scores = data.get('sub_scores', {})
+    feedback = data.get('feedback', {})
+    answers = data.get('answers', [])  # [{question_id, question_text, part, transcript}]
+
+    if not telegram_id or band is None:
+        return JsonResponse({'error': 'telegram_id and band required'}, status=400)
+
+    try:
+        user = User.objects.get(telegram_id=telegram_id)
+    except User.DoesNotExist:
+        return JsonResponse({'error': 'User not found'}, status=404)
+
+    # Q&A larni feedback ichida saqlash (keyinchalik Celery re-analyze uchun)
+    feedback['qa_pairs'] = answers
+
+    session = IELTSSession.objects.create(
+        user=user,
+        overall_band=band,
+        sub_scores=sub_scores,
+        strengths=feedback.get('strengths', []),
+        improvements=feedback.get('improvements', []),
+        mistakes=feedback.get('mistakes', []),
+        recommendations=feedback.get('recommendations', []),
+        is_completed=True,
+        ended_at=timezone.now(),
+    )
+    # feedback ni to'liq saqlash (qa_pairs bilan)
+    session.strengths = feedback.get('strengths', [])
+    session.improvements = feedback.get('improvements', [])
+    session.mistakes = feedback.get('mistakes', [])
+    session.recommendations = feedback.get('recommendations', [])
+    session.save(update_fields=['strengths', 'improvements', 'mistakes', 'recommendations'])
+
+    user.ielts_count = (user.ielts_count or 0) + 1
+    user.save(update_fields=['ielts_count'])
+
+    # Agar Q&A pairs bo'lsa — Celery orqali per-part deep analysis qilish
+    if answers:
+        try:
+            from .tasks import analyze_ielts_session_deep
+            analyze_ielts_session_deep.delay(session.id, answers)
+        except Exception:
+            pass
+
+    return JsonResponse({'ok': True, 'session_id': session.id, 'band': band})
+
+
+@csrf_exempt
+def bot_api_save_cefr(request):
+    """Bot: CEFR natijasini DRF ga saqlash + Celery deep analysis trigger"""
+    if not _check_bot_secret(request):
+        return JsonResponse({'error': 'Unauthorized'}, status=401)
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST required'}, status=405)
+
+    from cefr_mock.models import CEFRSession
+    from users.models import User
+    from django.utils import timezone
+
+    data = json.loads(request.body)
+    telegram_id = data.get('telegram_id')
+    score = data.get('score')
+    level = data.get('level')
+    feedback = data.get('feedback', {})
+    answers = data.get('answers', [])  # [{question_text, part, transcript}]
+
+    if not telegram_id or score is None or not level:
+        return JsonResponse({'error': 'telegram_id, score and level required'}, status=400)
+
+    try:
+        user = User.objects.get(telegram_id=telegram_id)
+    except User.DoesNotExist:
+        return JsonResponse({'error': 'User not found'}, status=404)
+
+    # Q&A larni feedback ichida saqlash
+    if answers:
+        feedback['qa_pairs'] = answers
+
+    session = CEFRSession.objects.create(
+        user=user,
+        score=score,
+        level=level,
+        feedback=feedback,
+        is_completed=True,
+        ended_at=timezone.now(),
+    )
+    user.cefr_count = (user.cefr_count or 0) + 1
+    user.save(update_fields=['cefr_count'])
+
+    # Per-part deep analysis (agar Q&A pairs bo'lsa)
+    if answers:
+        try:
+            from .tasks import analyze_cefr_session_deep
+            analyze_cefr_session_deep.delay(session.id, answers)
+        except Exception:
+            pass
+
+    return JsonResponse({'ok': True, 'session_id': session.id, 'score': score, 'level': level})
+
+
+
+
+@csrf_exempt
+def bot_api_check_limit(request):
+    if not _check_bot_secret(request):
+        return JsonResponse({'error': 'Unauthorized'}, status=401)
+
+    from users.models import User
+
+    telegram_id = request.GET.get('telegram_id')
+    limit_type = request.GET.get('type', '')
+
+    if not telegram_id:
+        return JsonResponse({'error': 'telegram_id required'}, status=400)
+
+    try:
+        user = User.objects.get(telegram_id=telegram_id)
+    except User.DoesNotExist:
+        return JsonResponse({'allowed': True, 'used': 0, 'total': 999})
+
+    if user.has_premium_active:
+        return JsonResponse({'allowed': True, 'used': 0, 'total': 999, 'is_premium': True})
+
+    s = AppSettings.get()
+
+    if limit_type == 'speaking':
+        from django.db.models import Q
+        used = VoiceRoom.objects.filter(
+            Q(user1=user) | Q(user2=user),
+            partner_type='human', status='ended'
+        ).count()
+        total = s.free_calls_limit
+
+    elif limit_type == 'ai_call':
+        from django.db.models import Q
+        used = VoiceRoom.objects.filter(
+            Q(user1=user) | Q(user2=user),
+            partner_type='ai', status='ended'
+        ).count()
+        total = s.free_ai_calls_limit
+
+    elif limit_type == 'practice':
+        from practice.models import PracticeSession
+        used = PracticeSession.objects.filter(user=user, is_completed=True).count()
+        total = s.free_practice_limit
+
+    elif limit_type == 'ielts':
+        from ielts_mock.models import IELTSSession
+        used = IELTSSession.objects.filter(user=user, is_completed=True).count()
+        total = s.free_ielts_limit
+
+    elif limit_type == 'cefr':
+        from cefr_mock.models import CEFRSession
+        used = CEFRSession.objects.filter(user=user, is_completed=True).count()
+        total = s.free_cefr_limit
+
+    else:
+        return JsonResponse({'allowed': True, 'used': 0, 'total': 999})
+
+    return JsonResponse({
+        'allowed': used < total,
+        'used': used,
+        'total': total,
+        'is_premium': False,
+    })
+
+# ─── Vocabulary Chat API (webapp) ─────────────────────────────────────────────
+
+@webapp_login_required
+@csrf_exempt
+def vocab_chat(request):
+    """AI bilan so'z muhokamasi — text javob + TTS audio (base64)"""
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST required'}, status=405)
+
+    user = request.user
+
+    # Limit tekshirish
+    if not user.has_premium_active:
+        s = AppSettings.get()
+        if (user.ai_message_count or 0) >= s.free_ai_message_limit:
+            return JsonResponse({'error': 'limit_reached'}, status=403)
+
+    data = json.loads(request.body or '{}')
+    word = data.get('word', '').strip()
+    message = data.get('message', '').strip()
+    history = data.get('history', [])
+
+    if not word or not message:
+        return JsonResponse({'error': 'word and message required'}, status=400)
+
+    from openai import OpenAI
+    import base64
+    client = OpenAI(api_key=settings.OPENAI_API_KEY)
+
+    # Build conversation
+    system_prompt = (
+        f'You are an English vocabulary coach helping the user understand the word "{word}". '
+        f'Explain clearly, give examples, and answer questions about this word. '
+        f'Keep responses short (2-3 sentences). Always speak in English.'
+    )
+    messages = [{'role': 'system', 'content': system_prompt}]
+    for h in history[-8:]:
+        messages.append({'role': h['role'], 'content': h['content']})
+    messages.append({'role': 'user', 'content': message})
+
+    # Text response
+    resp = client.chat.completions.create(
+        model='gpt-4o-mini',
+        messages=messages,
+        max_tokens=150,
+    )
+    ai_text = resp.choices[0].message.content
+
+    # TTS audio
+    audio_b64 = None
+    try:
+        tts = client.audio.speech.create(
+            model='tts-1',
+            voice='nova',
+            input=ai_text,
+            response_format='mp3',
+        )
+        audio_b64 = base64.b64encode(tts.content).decode()
+    except Exception:
+        pass
+
+    # Increment message count
+    user.ai_message_count = (user.ai_message_count or 0) + 1
+    user.save(update_fields=['ai_message_count'])
+
+    return JsonResponse({'text': ai_text, 'audio': audio_b64})
+
+
+def another_view(request):
+    return render(request, 'webapp/another.html')

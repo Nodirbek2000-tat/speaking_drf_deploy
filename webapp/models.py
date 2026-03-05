@@ -3,22 +3,80 @@ from django.conf import settings
 
 
 class AppSettings(models.Model):
-    """Singleton — global app settings"""
+    """
+    Singleton model — faqat 1 ta qator bo'ladi.
+    Admin paneldan barcha limitlarni o'rnatish mumkin.
+    """
+
+    # ── Free limitlar ──────────────────────────────────────────────────
     free_calls_limit = models.PositiveIntegerField(
-        default=3,
-        help_text="Yangi foydalanuvchilar uchun bepul qo'ng'iroqlar soni"
+        default=5,
+        verbose_name="Bepul qo'ng'iroqlar (Speaking)",
+        help_text="Premium bo'lmagan user nechta real partner call qila oladi"
     )
+    free_ai_calls_limit = models.PositiveIntegerField(
+        default=10,
+        verbose_name="Bepul AI qo'ng'iroqlar",
+        help_text="Premium bo'lmagan user nechta AI call qila oladi"
+    )
+    free_practice_limit = models.PositiveIntegerField(
+        default=2,
+        verbose_name="Bepul Practice sessiyalar (Mock)",
+        help_text="Premium bo'lmagan user nechta Practice sessiya o'tkazishi mumkin"
+    )
+    free_ielts_limit = models.PositiveIntegerField(
+        default=2,
+        verbose_name="Bepul IELTS Mock testlar",
+        help_text="Premium bo'lmagan user nechta IELTS Mock topshira oladi"
+    )
+    free_cefr_limit = models.PositiveIntegerField(
+        default=2,
+        verbose_name="Bepul CEFR Mock testlar",
+        help_text="Premium bo'lmagan user nechta CEFR Mock topshira oladi"
+    )
+    free_total_mock_limit = models.PositiveIntegerField(
+        default=2,
+        verbose_name="Bepul jami Mock (IELTS+CEFR)",
+        help_text="Bitta user nechta mock test topshira oladi (IELTS+CEFR hammasi)"
+    )
+    free_ai_message_limit = models.PositiveIntegerField(
+        default=40,
+        verbose_name="Bepul AI xabarlari soni",
+        help_text="Premium bo'lmagan user nechta AI chat xabari yuborishi mumkin"
+    )
+
+    # ── Premium eslatma ────────────────────────────────────────────────
+    premium_expiry_reminder_days = models.PositiveIntegerField(
+        default=1,
+        verbose_name="Premium tugashi eslatmasi (kun oldin)",
+        help_text="Premium tugashidan necha kun oldin foydalanuvchiga xabar yuborilsin"
+    )
+
+    # ── Referral ───────────────────────────────────────────────────────
     referrals_for_premium = models.PositiveIntegerField(
-        default=3,
-        help_text="Bepul premium olish uchun zarur referal soni"
+        default=5,
+        verbose_name="Premium uchun talab qilinadigan referallar soni"
     )
     referral_premium_days = models.PositiveIntegerField(
         default=30,
-        help_text="Referal orqali beriladigan bepul premium kunlar soni"
+        verbose_name="Referal orqali beriladigan premium (kun)"
     )
+
+    # ── Umumiy ────────────────────────────────────────────────────────
     web_app_url = models.URLField(
         blank=True,
-        help_text="Telegram Web App URL (masalan: https://yourdomain.com/webapp/)"
+        verbose_name="Web App URL",
+        help_text="Telegram Web App havolasi"
+    )
+    maintenance_mode = models.BooleanField(
+        default=False,
+        verbose_name="Texnik ishlar rejimi",
+        help_text="Yoqilsa bot faqat 'Texnik ishlar' xabarini yuboradi"
+    )
+    maintenance_message = models.TextField(
+        blank=True,
+        default="🔧 Texnik ishlar olib borilmoqda. Iltimos, keyinroq urinib ko'ring.",
+        verbose_name="Texnik ishlar xabari"
     )
 
     class Meta:
@@ -28,17 +86,14 @@ class AppSettings(models.Model):
     def __str__(self):
         return "App Sozlamalari"
 
-    def save(self, *args, **kwargs):
-        self.pk = 1
-        super().save(*args, **kwargs)
-
-    def delete(self, *args, **kwargs):
-        pass
-
     @classmethod
     def get(cls):
         obj, _ = cls.objects.get_or_create(pk=1)
         return obj
+
+    def save(self, *args, **kwargs):
+        self.pk = 1
+        super().save(*args, **kwargs)
 
 
 class PaymentCard(models.Model):
@@ -160,6 +215,27 @@ class VoiceRoom(models.Model):
         if self.user1 == user:
             return self.user2
         return self.user1
+
+
+class AIMessage(models.Model):
+    """AI suhbat xonasidagi har bir xabarni saqlaydi"""
+    ROLE_CHOICES = [('user', 'User'), ('assistant', 'Assistant')]
+
+    room = models.ForeignKey(
+        VoiceRoom, on_delete=models.CASCADE,
+        related_name='ai_messages'
+    )
+    role = models.CharField(max_length=10, choices=ROLE_CHOICES)
+    content = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "AI Xabar"
+        verbose_name_plural = "AI Xabarlar"
+        ordering = ['created_at']
+
+    def __str__(self):
+        return f"[{self.role}] Room {self.room_id} — {self.content[:50]}"
 
 
 class VoiceRating(models.Model):

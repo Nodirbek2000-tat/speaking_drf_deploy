@@ -10,6 +10,8 @@ urlpatterns = [
     path('logout/', views.logout_view, name='logout'),
     path('setup/', views.setup, name='setup'),
 
+    path('another/',views.another_view,name='another_type'),
+
     # Main pages
     path('home/', views.home, name='home'),
     path('speaking/', views.speaking, name='speaking'),
@@ -42,4 +44,14 @@ urlpatterns = [
     path('bot-api/payment-card/', views.bot_api_payment_card, name='bot_api_payment_card'),
     path('bot-api/premium-request/', views.bot_api_premium_request, name='bot_api_premium_request'),
     path('ws-token/', views.ws_token, name='ws_token'),
+
+    # Bot extended API
+    path('bot-api/leaderboard/', views.bot_api_leaderboard, name='bot_api_leaderboard'),
+    path('bot-api/save-ielts/', views.bot_api_save_ielts, name='bot_api_save_ielts'),
+    path('bot-api/save-cefr/', views.bot_api_save_cefr, name='bot_api_save_cefr'),
+    path('bot-api/save-phone/', views.bot_api_save_phone, name='bot_api_save_phone'),
+    path('bot-api/check-limit/', views.bot_api_check_limit, name='bot_api_check_limit'),
+
+    # Vocabulary chat
+    path('api/vocab-chat/', views.vocab_chat, name='vocab_chat'),
 ]

@@ -9,6 +9,7 @@ def verify_telegram_webapp(init_data: str, bot_token: str) -> dict | None:
     """
     Verify Telegram Web App initData.
     Returns user dict if valid, None if invalid.
+    Telegram docs: https://core.telegram.org/bots/webapps#validating-data-received-via-the-mini-app
     """
     try:
         if not init_data or not bot_token:
@@ -21,27 +22,35 @@ def verify_telegram_webapp(init_data: str, bot_token: str) -> dict | None:
         if not hash_value:
             return None
 
+        # Saralangan kalit=qiymat qatorlari
         data_check_string = '\n'.join(
             f"{k}={v}" for k, v in sorted(parts.items())
         )
 
+        # secret_key = HMAC_SHA256(key="WebAppData", data=bot_token)
         secret_key = hmac.new(
             b'WebAppData',
             bot_token.encode('utf-8'),
             hashlib.sha256
         ).digest()
 
+        # computed_hash = HMAC_SHA256(key=secret_key, data=data_check_string)
         computed_hash = hmac.new(
             secret_key,
             data_check_string.encode('utf-8'),
             hashlib.sha256
         ).hexdigest()
 
-        if computed_hash != hash_value:
+        if not hmac.compare_digest(computed_hash, hash_value):
             return None
 
         user_str = parts.get('user', '{}')
         user_data = json.loads(user_str)
+
+        # Minimal tekshiruv: id bo'lishi shart
+        if not user_data.get('id'):
+            return None
+
         return user_data
 
     except Exception:

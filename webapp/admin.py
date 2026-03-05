@@ -1,38 +1,45 @@
 from django.contrib import admin
 from django.utils.html import format_html
 from django.utils import timezone
-from .models import AppSettings, PaymentCard, RequiredChannel, VoiceRoom, VoiceRating
-
+from .models import AppSettings, PaymentCard, RequiredChannel, VoiceRoom, VoiceRating, AIMessage
 
 @admin.register(AppSettings)
 class AppSettingsAdmin(admin.ModelAdmin):
     fieldsets = (
-        ('Bepul Limitlar', {
-            'fields': ('free_calls_limit',),
-            'description': 'Yangi foydalanuvchilar uchun bepul qo\'ng\'iroqlar soni',
+        ('🎙 Speaking Limitlari', {
+            'fields': ('free_calls_limit', 'free_ai_calls_limit'),
+            'description': 'Premium bo\'lmagan foydalanuvchilar uchun bepul qo\'ng\'iroq limitlari'
         }),
-        ('Referal Tizimi', {
-            'fields': ('referrals_for_premium', 'referral_premium_days'),
+        ('📝 Mock Test Limitlari', {
+            'fields': ('free_ielts_limit', 'free_cefr_limit'),
         }),
-        ('Web App', {
-            'fields': ('web_app_url',),
+        ('🎤 Practice Limitlari', {
+            'fields': ('free_practice_limit',),
+        }),
+        ('💎 Premium Sozlamalari', {
+            'fields': (
+                'premium_expiry_reminder_days',
+                'referrals_for_premium',
+                'referral_premium_days',
+            ),
+        }),
+        ('⚙️ Umumiy', {
+            'fields': ('web_app_url', 'maintenance_mode', 'maintenance_message'),
         }),
     )
 
     def has_add_permission(self, request):
+        # Faqat bitta obyekt bo'lishi kerak
         return not AppSettings.objects.exists()
 
     def has_delete_permission(self, request, obj=None):
         return False
 
-    def get_object(self, request, object_id, from_field=None):
-        obj = AppSettings.get()
-        return obj
-
     def changelist_view(self, request, extra_context=None):
-        obj = AppSettings.get()
-        return self.change_view(request, str(obj.pk), extra_context=extra_context)
-
+        # Ro'yxat sahifasi o'rniga to'g'ridan-to'g'ri edit sahifasiga o'tish
+        obj, _ = AppSettings.objects.get_or_create(pk=1)
+        from django.shortcuts import redirect
+        return redirect(f'/admin/webapp/appsettings/{obj.pk}/change/')
 
 @admin.register(PaymentCard)
 class PaymentCardAdmin(admin.ModelAdmin):
@@ -131,3 +138,22 @@ class VoiceRatingAdmin(admin.ModelAdmin):
     def comment_preview(self, obj):
         return (obj.comment[:60] + '...') if len(obj.comment) > 60 else obj.comment or '—'
     comment_preview.short_description = 'Izoh'
+
+
+@admin.register(AIMessage)
+class AIMessageAdmin(admin.ModelAdmin):
+    list_display = ('id', 'room', 'role_badge', 'content_preview', 'created_at')
+    list_filter = ('role',)
+    readonly_fields = ('room', 'role', 'content', 'created_at')
+    search_fields = ('content', 'room__user1__username')
+    date_hierarchy = 'created_at'
+
+    def role_badge(self, obj):
+        if obj.role == 'user':
+            return format_html('<span style="color:#3b82f6">👤 User</span>')
+        return format_html('<span style="color:#10b981">🤖 AI</span>')
+    role_badge.short_description = 'Kim'
+
+    def content_preview(self, obj):
+        return (obj.content[:80] + '...') if len(obj.content) > 80 else obj.content
+    content_preview.short_description = 'Xabar'

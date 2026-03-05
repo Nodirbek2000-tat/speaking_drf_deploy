@@ -1,6 +1,17 @@
-version: '3.9'
-
 services:
+
+  db:
+    image: postgres:15-alpine
+    restart: always
+    env_file: .env
+    environment:
+      POSTGRES_DB: ${DB_NAME:-speaking_db}
+      POSTGRES_USER: ${DB_USER:-speaking_user}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-speaking_pass}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    expose:
+      - "5432"
 
   web:
     build: .
@@ -11,6 +22,7 @@ services:
       - static_volume:/app/staticfiles
     depends_on:
       - redis
+      - db
     expose:
       - "8000"
 
@@ -44,6 +56,7 @@ services:
     entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew --quiet; sleep 12h & wait $${!}; done'"
 
 volumes:
+  postgres_data:
   media_volume:
   static_volume:
   certbot_www:

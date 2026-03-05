@@ -1,126 +1,135 @@
 {% extends 'webapp/base.html' %}
-{% block title %}{{ scenario.title }} — Practice{% endblock %}
-
+{% block title %}{{ scenario.title }}{% endblock %}
 {% block bottom_nav %}{% endblock %}
 
 {% block content %}
-<div class="fixed inset-0 flex flex-col" style="background:#0f0f13">
+<div style="min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:space-between;padding:60px 20px 50px;background:#0f0f13;">
 
-  <!-- Header -->
-  <div class="safe-top px-5 py-3 flex items-center justify-between border-b border-white/5">
-    <div class="flex items-center gap-2">
-      <div class="w-2 h-2 rounded-full bg-brand pulse-dot"></div>
-      <span class="text-sm font-medium text-white">{{ scenario.title }}</span>
-    </div>
-    <div class="flex items-center gap-3">
-      <span id="sessionTimer" class="font-mono text-sm font-bold text-slate-300">0:00</span>
-      <button onclick="confirmEnd()" class="text-xs text-danger border border-danger/30 rounded-lg px-3 py-1.5 active:scale-95 transition-transform">End</button>
-    </div>
+  <!-- Timer -->
+  <div style="display:flex;align-items:center;gap:8px;">
+    <div style="width:8px;height:8px;border-radius:50%;background:#10b981;animation:pulseDot 1.4s ease-in-out infinite;"></div>
+    <span id="sessionTimer" style="font-family:monospace;font-size:18px;font-weight:700;color:#fff;">0:00</span>
   </div>
 
-  <!-- Conversation -->
-  <div class="flex-1 overflow-y-auto px-4 py-4 space-y-3" id="chatContainer">
-    <div class="flex items-center justify-center py-6">
-      <div class="text-center">
-        <div class="text-4xl mb-2">🤖</div>
-        <p class="text-sm text-slate-400">AI is preparing...</p>
+  <!-- Avatar -->
+  <div style="text-align:center;">
+    <div style="position:relative;width:130px;height:130px;margin:0 auto 20px;">
+      <div id="speakRing1" style="position:absolute;inset:-10px;border-radius:50%;border:2px solid #6366f150;opacity:0;transition:opacity 0.3s;animation:ringPulse 1.5s ease-out infinite;"></div>
+      <div id="speakRing2" style="position:absolute;inset:-20px;border-radius:50%;border:2px solid #6366f130;opacity:0;transition:opacity 0.3s;animation:ringPulse 1.5s ease-out 0.4s infinite;"></div>
+      <div style="width:130px;height:130px;border-radius:50%;background:linear-gradient(135deg,#6366f1,#8b5cf6);display:flex;align-items:center;justify-content:center;font-size:48px;font-weight:800;color:#fff;">
+        {{ scenario.title|first|upper }}
       </div>
+      <div style="position:absolute;bottom:6px;right:6px;width:18px;height:18px;background:#10b981;border-radius:50%;border:3px solid #0f0f13;"></div>
     </div>
-  </div>
 
-  <!-- AI Speaking Indicator -->
-  <div id="aiSpeaking" class="hidden px-4 py-2 flex items-center gap-2">
-    <div class="flex gap-1 items-center">
-      <div class="w-1.5 h-4 bg-brand rounded-full" style="animation: barPulse 0.8s ease-in-out infinite; animation-delay: 0s"></div>
-      <div class="w-1.5 h-6 bg-brand rounded-full" style="animation: barPulse 0.8s ease-in-out infinite; animation-delay: 0.1s"></div>
-      <div class="w-1.5 h-5 bg-brand rounded-full" style="animation: barPulse 0.8s ease-in-out infinite; animation-delay: 0.2s"></div>
-      <div class="w-1.5 h-3 bg-brand rounded-full" style="animation: barPulse 0.8s ease-in-out infinite; animation-delay: 0.3s"></div>
-      <div class="w-1.5 h-5 bg-brand rounded-full" style="animation: barPulse 0.8s ease-in-out infinite; animation-delay: 0.15s"></div>
+    <h2 style="font-size:24px;font-weight:700;color:#fff;margin:0 0 6px;">{{ scenario.ai_role|default:scenario.title }}</h2>
+    <div style="display:inline-block;background:#6366f115;border:1px solid #6366f1;color:#6366f1;font-size:12px;padding:4px 16px;border-radius:20px;margin-bottom:24px;">
+      {{ scenario.title }}
     </div>
-    <span class="text-xs text-slate-400">AI is speaking...</span>
+
+    <!-- Status -->
+    <div id="statusText" style="font-size:14px;color:#9ca3af;min-height:22px;transition:color 0.3s;">
+      Connecting...
+    </div>
+
+    <!-- User speaking indicator -->
+    <div id="userBar" style="display:none;justify-content:center;gap:3px;margin-top:12px;height:24px;align-items:center;">
+      <div style="width:4px;background:#10b981;border-radius:2px;animation:barUp 0.5s ease-in-out infinite;animation-delay:0s;"></div>
+      <div style="width:4px;background:#10b981;border-radius:2px;animation:barUp 0.5s ease-in-out infinite;animation-delay:0.1s;"></div>
+      <div style="width:4px;background:#10b981;border-radius:2px;animation:barUp 0.5s ease-in-out infinite;animation-delay:0.2s;"></div>
+      <div style="width:4px;background:#10b981;border-radius:2px;animation:barUp 0.5s ease-in-out infinite;animation-delay:0.1s;"></div>
+      <div style="width:4px;background:#10b981;border-radius:2px;animation:barUp 0.5s ease-in-out infinite;animation-delay:0.05s;"></div>
+    </div>
   </div>
 
   <!-- Controls -->
-  <div class="px-5 py-4 border-t border-white/5 flex items-center justify-center gap-8" style="padding-bottom: calc(16px + env(safe-area-inset-bottom,0px))">
-    <!-- Hold to Talk -->
-    <div class="flex flex-col items-center gap-2">
-      <button id="micBtn"
-        onmousedown="startRecording()" ontouchstart="startRecording(event)"
-        onmouseup="stopRecording()" ontouchend="stopRecording()"
-        ontouchcancel="stopRecording()"
-        class="w-16 h-16 rounded-full border-2 border-white/10 flex items-center justify-center transition-all active:scale-95"
-        style="background:#242430">
-        <svg class="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"/></svg>
-      </button>
-      <span id="micLabel" class="text-xs text-slate-400">Hold to Talk</span>
+  <div style="display:flex;gap:32px;align-items:center;justify-content:center;">
+    <div style="display:flex;flex-direction:column;align-items:center;gap:8px;">
+      <div id="micBtn" style="width:60px;height:60px;border-radius:50%;background:#242430;border:2px solid #374151;display:flex;align-items:center;justify-content:center;">
+        <svg width="26" height="26" fill="none" stroke="#fff" stroke-width="2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"/>
+        </svg>
+      </div>
+      <span style="font-size:11px;color:#6b7280;">Mic</span>
     </div>
 
-    <!-- End Practice -->
-    <div class="flex flex-col items-center gap-2">
-      <button onclick="confirmEnd()" class="w-16 h-16 rounded-full bg-danger/15 border-2 border-danger/30 flex items-center justify-center transition-all active:scale-95">
-        <svg class="w-7 h-7 text-danger" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 10a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z"/></svg>
+    <div style="display:flex;flex-direction:column;align-items:center;gap:8px;">
+      <button onclick="confirmEnd()"
+        style="width:72px;height:72px;border-radius:50%;background:#ef4444;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 24px #ef444450;">
+        <svg width="28" height="28" fill="currentColor" viewBox="0 0 24 24" style="color:#fff">
+          <path d="M20.01 15.38c-1.23 0-2.42-.2-3.53-.56a.977.977 0 00-1.01.24l-1.57 1.97c-2.83-1.35-5.48-3.9-6.89-6.83l1.95-1.66c.27-.28.35-.67.24-1.02-.37-1.11-.56-2.3-.56-3.53 0-.54-.45-.99-.99-.99H4.19C3.65 3 3 3.24 3 3.99 3 13.28 10.73 21 20.01 21c.71 0 .99-.63.99-1.18v-3.45c0-.54-.45-.99-.99-.99z"/>
+        </svg>
       </button>
-      <span class="text-xs text-danger">Stop</span>
+      <span style="font-size:11px;color:#ef4444;font-weight:600;">End</span>
     </div>
   </div>
 </div>
 
 <!-- Feedback Modal -->
 <div id="feedbackModal" class="hidden fixed inset-0 z-[300] overflow-y-auto" style="background:#0f0f13">
-  <div class="min-h-full px-5 py-8">
+  <div class="min-h-full px-5 py-8 pb-16">
     <div class="safe-top">
       <div class="text-center mb-6">
         <div class="text-5xl mb-3">📊</div>
         <h2 class="text-2xl font-bold text-white">Session Complete!</h2>
-        <p class="text-slate-400 text-sm mt-1">Here's your performance analysis</p>
+        <p class="text-slate-400 text-sm mt-1">Here's your performance</p>
       </div>
 
-      <!-- Score -->
-      <div id="scoreSection" class="card p-5 mb-4 text-center">
-        <div id="scoreCircle" class="w-20 h-20 rounded-full flex items-center justify-center text-3xl font-black mx-auto mb-2" style="background:rgba(99,102,241,0.15);color:#6366f1">—</div>
-        <p class="text-slate-400 text-sm">Overall Score</p>
+      <div class="card p-5 mb-4">
+        <div class="text-center mb-4">
+          <div id="scoreCircle" class="w-20 h-20 rounded-full flex items-center justify-center text-3xl font-black mx-auto mb-2" style="background:rgba(99,102,241,0.15);color:#6366f1">—</div>
+          <p class="text-slate-400 text-sm">Overall Score</p>
+        </div>
+        <div id="subScores" class="hidden space-y-3">
+          <div>
+            <div class="flex justify-between text-xs mb-1"><span class="text-slate-400">Grammar</span><span id="grammarVal" class="text-green-400 font-bold"></span></div>
+            <div class="bg-slate-700 rounded-full h-2"><div id="grammarBar" class="h-2 rounded-full bg-green-400 transition-all duration-700" style="width:0%"></div></div>
+          </div>
+          <div>
+            <div class="flex justify-between text-xs mb-1"><span class="text-slate-400">Vocabulary</span><span id="vocabVal" class="text-yellow-400 font-bold"></span></div>
+            <div class="bg-slate-700 rounded-full h-2"><div id="vocabBar" class="h-2 rounded-full bg-yellow-400 transition-all duration-700" style="width:0%"></div></div>
+          </div>
+          <div>
+            <div class="flex justify-between text-xs mb-1"><span class="text-slate-400">Fluency</span><span id="fluencyVal" class="text-purple-400 font-bold"></span></div>
+            <div class="bg-slate-700 rounded-full h-2"><div id="fluencyBar" class="h-2 rounded-full bg-purple-400 transition-all duration-700" style="width:0%"></div></div>
+          </div>
+        </div>
       </div>
 
-      <!-- Overall Comment -->
       <div id="overallComment" class="card p-4 mb-4 hidden">
         <p id="overallCommentText" class="text-sm text-slate-300 leading-relaxed text-center"></p>
       </div>
-
-      <!-- Strengths -->
       <div id="strengthsSection" class="card p-4 mb-3 hidden">
-        <h3 class="text-sm font-semibold text-success mb-3 flex items-center gap-2">✅ Strengths</h3>
+        <h3 class="text-sm font-semibold text-success mb-3">✅ Kuchli tomonlar</h3>
         <ul id="strengthsList" class="space-y-2"></ul>
       </div>
-
-      <!-- Improvements -->
       <div id="improvSection" class="card p-4 mb-3 hidden">
-        <h3 class="text-sm font-semibold text-gold mb-3 flex items-center gap-2">⚠️ Areas to Improve</h3>
+        <h3 class="text-sm font-semibold text-gold mb-3">⚠️ Yaxshilash kerak</h3>
         <ul id="improvList" class="space-y-2"></ul>
       </div>
-
-      <!-- Mistakes -->
-      <div id="mistakesSection" class="card p-4 mb-4 hidden">
-        <h3 class="text-sm font-semibold text-danger mb-3 flex items-center gap-2">❌ Mistakes</h3>
+      <div id="mistakesSection" class="card p-4 mb-3 hidden">
+        <h3 class="text-sm font-semibold text-danger mb-3">❌ Grammatika xatolari</h3>
         <ul id="mistakesList" class="space-y-2"></ul>
       </div>
+      <div id="dailyPlanSection" class="card p-4 mb-3 hidden">
+        <h3 class="text-sm font-semibold text-slate-200 mb-3">📅 Ertangi reja</h3>
+        <ul id="dailyPlanList" class="space-y-2"></ul>
+      </div>
+      <div id="criticalSection" class="card p-4 mb-6 hidden">
+        <h3 class="text-sm font-semibold text-slate-200 mb-3">🧠 Critical Thinking</h3>
+        <p id="criticalText" class="text-sm text-slate-400 leading-relaxed"></p>
+      </div>
 
-      <button onclick="window.location.href='/webapp/practice/'" class="btn-primary">
-        Back to Practice
-      </button>
-      <button onclick="window.location.href='/webapp/home/'" class="btn-secondary mt-2">
-        Go Home
-      </button>
+      <button onclick="window.location.href='/webapp/practice/'" class="btn-primary">🔄 Qayta Practice</button>
+      <button onclick="window.location.href='/webapp/progress/'" class="btn-secondary mt-2">📈 Progressim</button>
     </div>
   </div>
 </div>
 
 <style>
-@keyframes barPulse { 0%,100%{transform:scaleY(0.5)} 50%{transform:scaleY(1.2)} }
-.msg-ai { display: flex; align-items: flex-start; gap: 10px; }
-.msg-ai .bubble { background: #1a1a22; border: 1px solid rgba(255,255,255,0.06); color: #e2e8f0; }
-.msg-user { display: flex; align-items: flex-start; gap: 10px; flex-direction: row-reverse; }
-.msg-user .bubble { background: #4f46e5; color: white; }
-.bubble { border-radius: 18px; padding: 10px 14px; font-size: 14px; line-height: 1.5; max-width: 80%; word-break: break-word; }
+@keyframes pulseDot { 0%,100%{transform:scale(1);opacity:1} 50%{transform:scale(1.4);opacity:0.6} }
+@keyframes ringPulse { 0%{opacity:0.7;transform:scale(0.95)} 100%{opacity:0;transform:scale(1.2)} }
+@keyframes barUp { 0%,100%{height:8px} 50%{height:22px} }
 </style>
 {% endblock %}
 
@@ -129,159 +138,329 @@
 window._inPractice = true;
 
 const sessionId = {{ session.id }};
-let ws = null;
-let timerInterval = null;
-let secs = 0;
-let mediaRecorder = null, chunks = [];
-let recording = false;
+const wsProto   = location.protocol === 'https:' ? 'wss:' : 'ws:';
 
-// Timer
-timerInterval = setInterval(() => {
+let ws = null;
+let secs = 0;
+let timerInterval = setInterval(() => {
   secs++;
-  document.getElementById('sessionTimer').textContent = formatTime(secs);
+  document.getElementById('sessionTimer').textContent = fmt(secs);
 }, 1000);
 
-// Connect WebSocket
-const wsProto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+// ── Audio state ───────────────────────────────────────────────────────
+let mediaRecorder  = null;
+let audioStream    = null;
+let audioChunks    = [];
+let isRecording    = false;
+let isBusy         = false;   // Server javobi kutilmoqda
+let currentAudio   = null;
+let mp3Parts       = [];
+
+// VAD (Voice Activity Detection) state
+let analyser       = null;
+let vadContext     = null;
+let silenceTimer   = null;
+let speechDetected = false;
+
+const SILENCE_MS   = 1000;   // 1.2 soniya sukunat → gapni tugatdi
+const SPEECH_THRESHOLD = 5; // 0-255 oralig'ida
+
+// ── WebSocket ─────────────────────────────────────────────────────────
 ws = new WebSocket(`${wsProto}//${location.host}/ws/practice/${sessionId}/`);
 ws.binaryType = 'arraybuffer';
 
+ws.onopen = async () => {
+  setStatus('Mic ulanmoqda...');
+  await startVAD();
+};
+
 ws.onmessage = async (e) => {
-  if (typeof e.data === 'string') {
-    const d = JSON.parse(e.data);
-    if (d.type === 'ai_text') {
-      addMsg('ai', d.text);
-      document.getElementById('aiSpeaking').classList.remove('hidden');
-    } else if (d.type === 'user_transcript') {
-      addMsg('user', d.text);
-    } else if (d.type === 'feedback') {
-      showFeedback(d.data);
-    }
-  } else {
-    // Audio
-    document.getElementById('aiSpeaking').classList.remove('hidden');
-    const blob = new Blob([e.data], { type: 'audio/mpeg' });
-    const audio = new Audio(URL.createObjectURL(blob));
-    audio.onended = () => document.getElementById('aiSpeaking').classList.add('hidden');
-    audio.play().catch(() => document.getElementById('aiSpeaking').classList.add('hidden'));
+  if (e.data instanceof ArrayBuffer) {
+    // MP3 chunk
+    mp3Parts.push(new Uint8Array(e.data));
+    return;
+  }
+
+  const d = JSON.parse(e.data);
+
+  if (d.type === 'ai_done') {
+    // AI javob to'liq keldi — play qilamiz
+    await playMp3();
+    isBusy = false;
+    setStatus('Listening...');
+    showRings(false);
+
+  } else if (d.type === 'ai_text') {
+    showRings(true);
+    setStatus('AI gapiryapti...');
+
+  } else if (d.type === 'user_transcript') {
+    setStatus('Thinking...');
+
+  } else if (d.type === 'ready' || d.type === 'busy') {
+    isBusy = false;
+    setStatus('Listening...');
+
+  } else if (d.type === 'feedback') {
+    clearInterval(timerInterval);
+    showFeedback(d.data);
   }
 };
 
-ws.onerror = () => showToast('Connection error. Server may be down.', 'error');
+ws.onerror = () => showToast('Connection error.', 'error');
 ws.onclose = (e) => {
-  if (e.code === 4001) { showToast('Please log in again', 'error'); window.location.href = '/webapp/'; }
-  else if (e.code === 4004) { showToast('Session not found', 'error'); window.location.href = '/webapp/practice/'; }
+  if (e.code === 4001) { window.location.href = '/webapp/'; }
+  else if (e.code === 4004) { window.location.href = '/webapp/practice/'; }
 };
 
-function addMsg(role, text) {
-  const container = document.getElementById('chatContainer');
-  // Remove loading indicator
-  const loader = container.querySelector('.text-center');
-  if (loader) loader.remove();
+// ── VAD + MediaRecorder ───────────────────────────────────────────────
+async function startVAD() {
+  try {
+    audioStream = await navigator.mediaDevices.getUserMedia({
+      audio: { echoCancellation: true, noiseSuppression: true, channelCount: 1 }
+    });
 
-  const div = document.createElement('div');
-  div.className = role === 'ai' ? 'msg-ai' : 'msg-user';
-  div.innerHTML = `
-    ${role === 'ai' ? '<div class="w-8 h-8 rounded-full bg-brand/20 flex items-center justify-center text-sm flex-shrink-0">🤖</div>' : ''}
-    <div class="bubble">${text}</div>
-  `;
-  container.appendChild(div);
-  container.scrollTop = container.scrollHeight;
+    // Amplitude analiz uchun
+    vadContext = new AudioContext();
+    const source = vadContext.createMediaStreamSource(audioStream);
+    analyser = vadContext.createAnalyser();
+    analyser.fftSize = 512;
+    source.connect(analyser);
+
+    setStatus('Listening...');
+    monitorVoice();
+
+  } catch {
+    showToast('Mikrofon ruxsati kerak!', 'error');
+    setStatus('⚠️ Mic ruxsati yo\'q');
+  }
 }
 
-async function startRecording(e) {
-  if (e) e.preventDefault();
-  if (recording) return;
-  try {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    chunks = [];
-    const mimeType = MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : 'audio/mp4';
-    mediaRecorder = new MediaRecorder(stream, { mimeType });
-    mediaRecorder.ondataavailable = ev => { if (ev.data.size > 0) chunks.push(ev.data); };
-    mediaRecorder.onstop = () => {
-      const blob = new Blob(chunks, { type: mimeType });
-      if (ws && ws.readyState === WebSocket.OPEN) ws.send(blob);
-      stream.getTracks().forEach(t => t.stop());
-    };
-    mediaRecorder.start();
-    recording = true;
-    document.getElementById('micBtn').style.background = 'rgba(99,102,241,0.25)';
-    document.getElementById('micBtn').style.borderColor = '#6366f1';
-    document.getElementById('micLabel').textContent = '🔴 Recording...';
-  } catch {
-    showToast('Microphone permission denied', 'error');
+function monitorVoice() {
+  if (!analyser) return;
+  const data = new Uint8Array(analyser.frequencyBinCount);
+
+  function tick() {
+    if (!analyser) return;
+    analyser.getByteFrequencyData(data);
+
+    // O'rtacha amplituda
+    const avg = data.reduce((a, b) => a + b, 0) / data.length;
+
+    if (avg > SPEECH_THRESHOLD) {
+      // Ovoz bor
+      if (!isRecording && !isBusy) {
+        startRecording();
+      }
+      clearTimeout(silenceTimer);
+      if (isRecording) speechDetected = true;
+    } else {
+      // Sukunat
+      if (isRecording && speechDetected) {
+        clearTimeout(silenceTimer);
+        silenceTimer = setTimeout(() => {
+          if (isRecording) stopRecording();
+        }, SILENCE_MS);
+      }
+    }
+
+    requestAnimationFrame(tick);
   }
+  tick();
+}
+
+function startRecording() {
+  if (isRecording || !audioStream) return;
+  isRecording    = true;
+  speechDetected = false;
+  audioChunks    = [];
+
+  // User bar ko'rsat
+  document.getElementById('userBar').style.display = 'flex';
+  setStatus('🎙 Siz gapiryapsiz...');
+
+  // Browser qo'llab quvvatlaydigan formatni tanlaymiz
+  const mimeType = [
+    'audio/webm;codecs=opus',
+    'audio/webm',
+    'audio/ogg;codecs=opus',
+    'audio/mp4',
+  ].find(t => MediaRecorder.isTypeSupported(t)) || '';
+
+  mediaRecorder = new MediaRecorder(audioStream, mimeType ? { mimeType } : {});
+  mediaRecorder.ondataavailable = (e) => {
+    if (e.data.size > 0) audioChunks.push(e.data);
+  };
+  mediaRecorder.onstop = sendAudio;
+  mediaRecorder.start(100); // 100ms chunk lar
 }
 
 function stopRecording() {
-  if (!recording || !mediaRecorder) return;
+  if (!isRecording || !mediaRecorder) return;
+  isRecording = false;
+  document.getElementById('userBar').style.display = 'none';
   mediaRecorder.stop();
-  recording = false;
-  document.getElementById('micBtn').style.background = '#242430';
-  document.getElementById('micBtn').style.borderColor = 'rgba(255,255,255,0.1)';
-  document.getElementById('micLabel').textContent = 'Hold to Talk';
+  setStatus('⏳ Processing...');
+}
+
+async function sendAudio() {
+  if (!audioChunks.length || isBusy || !ws || ws.readyState !== WebSocket.OPEN) return;
+  // Juda qisqa audio bo'lsa skip
+  const totalSize = audioChunks.reduce((s, c) => s + c.size, 0);
+  if (totalSize < 3000) { audioChunks = []; isBusy = false; return; }
+
+  isBusy = true;
+  const blob   = new Blob(audioChunks, { type: 'audio/webm' });
+  audioChunks  = [];
+
+  // Blob → base64
+  const reader = new FileReader();
+  reader.onloadend = () => {
+    const base64 = reader.result.split(',')[1];
+    ws.send(JSON.stringify({ type: 'audio', data: base64 }));
+  };
+  reader.readAsDataURL(blob);
+}
+
+// ── MP3 playback ──────────────────────────────────────────────────────
+async function playMp3() {
+  if (!mp3Parts.length) return;
+
+  // AI gapirayotganda recording to'xtatamiz
+  if (isRecording) {
+    isRecording = false;
+    mediaRecorder?.stop();
+    audioChunks = [];
+  }
+
+  const total  = mp3Parts.reduce((s, c) => s + c.length, 0);
+  const merged = new Uint8Array(total);
+  let off = 0;
+  mp3Parts.forEach(c => { merged.set(c, off); off += c.length; });
+  mp3Parts = [];
+
+  const blob  = new Blob([merged], { type: 'audio/mpeg' });
+  const url   = URL.createObjectURL(blob);
+  const audio = new Audio(url);
+  currentAudio = audio;
+
+  return new Promise((resolve) => {
+    audio.onended = () => {
+      URL.revokeObjectURL(url);
+      currentAudio = null;
+      resolve();
+    };
+    audio.onerror = () => { resolve(); };
+    audio.play().catch(() => {
+      // Autoplay blocked
+      setStatus('▶ Bosing (audio)');
+      document.addEventListener('click', () => audio.play(), { once: true });
+      audio.onended = () => { URL.revokeObjectURL(url); resolve(); };
+    });
+  });
+}
+
+// ── UI ────────────────────────────────────────────────────────────────
+function setStatus(text) {
+  document.getElementById('statusText').textContent = text;
+}
+
+function showRings(on) {
+  ['speakRing1','speakRing2'].forEach(id => {
+    document.getElementById(id).style.opacity = on ? '1' : '0';
+  });
 }
 
 function confirmEnd() {
-  if (confirm('End this practice session?')) {
-    endSession();
-  }
+  if (confirm('End this practice session?')) endSession();
 }
 
 function endSession() {
   clearInterval(timerInterval);
   window._inPractice = false;
+
+  // To'xtat
+  if (isRecording && mediaRecorder) { mediaRecorder.stop(); }
+  if (currentAudio) { currentAudio.pause(); }
+  if (analyser) { analyser = null; }
+  if (vadContext) { vadContext.close().catch(()=>{}); }
+  if (audioStream) { audioStream.getTracks().forEach(t => t.stop()); }
+
   if (ws && ws.readyState === WebSocket.OPEN) {
+    setStatus('⏳ Tahlil qilinmoqda...');
+    isBusy = true;
     ws.send(JSON.stringify({ type: 'end' }));
-    showToast('Analyzing your performance...', 'info');
   } else {
-    // WS ulanmagan — orqaga qayt
     window.location.href = '/webapp/practice/';
   }
 }
 
+// ── Feedback ──────────────────────────────────────────────────────────
 function showFeedback(data) {
-  const modal = document.getElementById('feedbackModal');
-  modal.classList.remove('hidden');
-  modal.style.display = 'block';
+  document.getElementById('feedbackModal').classList.remove('hidden');
 
-  // Score
   const score = data.score || 0;
-  const scoreEl = document.getElementById('scoreCircle');
-  scoreEl.textContent = score + '%';
-  if (score >= 80) scoreEl.style.color = '#10b981';
-  else if (score >= 60) scoreEl.style.color = '#f59e0b';
-  else scoreEl.style.color = '#ef4444';
+  const el = document.getElementById('scoreCircle');
+  el.textContent      = score + '%';
+  el.style.color      = score>=80?'#10b981':score>=60?'#f59e0b':'#ef4444';
+  el.style.background = score>=80?'rgba(16,185,129,.15)':score>=60?'rgba(245,158,11,.15)':'rgba(239,68,68,.15)';
 
-  // Overall comment
+  const g=data.grammar_score||0, v=data.vocab_score||0, f=data.fluency_score||0;
+  if (g||v||f) {
+    document.getElementById('subScores').classList.remove('hidden');
+    document.getElementById('grammarVal').textContent = g+'%';
+    document.getElementById('vocabVal').textContent   = v+'%';
+    document.getElementById('fluencyVal').textContent = f+'%';
+    setTimeout(() => {
+      document.getElementById('grammarBar').style.width = g+'%';
+      document.getElementById('vocabBar').style.width   = v+'%';
+      document.getElementById('fluencyBar').style.width = f+'%';
+    }, 100);
+  }
+
   if (data.overall_comment) {
     document.getElementById('overallComment').classList.remove('hidden');
     document.getElementById('overallCommentText').textContent = data.overall_comment;
   }
 
-  // Strengths
-  if (data.strengths && data.strengths.length) {
-    document.getElementById('strengthsSection').classList.remove('hidden');
-    document.getElementById('strengthsList').innerHTML = data.strengths.map(s =>
-      `<li class="text-sm text-slate-300 flex items-start gap-2"><span class="text-success mt-0.5">•</span>${s}</li>`
-    ).join('');
-  }
+  renderList('strengthsSection','strengthsList', data.strengths,
+    s=>`<li class="text-sm text-slate-300 flex gap-2"><span class="text-success">✅</span>${esc(s)}</li>`);
+  renderList('improvSection','improvList', data.improvements,
+    s=>`<li class="text-sm text-slate-300 flex gap-2"><span class="text-gold">📌</span>${esc(s)}</li>`);
 
-  // Improvements
-  if (data.improvements && data.improvements.length) {
-    document.getElementById('improvSection').classList.remove('hidden');
-    document.getElementById('improvList').innerHTML = data.improvements.map(s =>
-      `<li class="text-sm text-slate-300 flex items-start gap-2"><span class="text-gold mt-0.5">•</span>${s}</li>`
-    ).join('');
-  }
-
-  // Mistakes
-  if (data.mistakes && data.mistakes.length) {
+  if (data.mistakes?.length) {
     document.getElementById('mistakesSection').classList.remove('hidden');
-    document.getElementById('mistakesList').innerHTML = data.mistakes.map(m =>
-      `<li class="text-sm text-slate-300 flex items-start gap-2"><span class="text-danger mt-0.5">→</span><span>${typeof m === 'object' ? (m.correction || JSON.stringify(m)) : m}</span></li>`
-    ).join('');
+    document.getElementById('mistakesList').innerHTML = data.mistakes.map(m=>
+      `<li class="text-sm bg-red-950/30 rounded-xl p-3">
+        <span class="text-danger line-through">${esc(m.wrong||'')}</span> → <span class="text-success">${esc(m.correct||'')}</span>
+        ${m.explanation?`<div class="text-xs text-slate-500 mt-1">${esc(m.explanation)}</div>`:''}
+      </li>`).join('');
+  }
+
+  if (data.daily_plan?.length) {
+    document.getElementById('dailyPlanSection').classList.remove('hidden');
+    document.getElementById('dailyPlanList').innerHTML = data.daily_plan.map((t,i)=>
+      `<li class="text-sm text-slate-300 flex gap-2">
+        <span class="w-5 h-5 rounded-full bg-indigo-500/20 text-indigo-400 flex items-center justify-center text-xs flex-shrink-0 mt-0.5">${i+1}</span>${esc(t)}
+      </li>`).join('');
+  }
+
+  if (data.critical_thinking) {
+    document.getElementById('criticalSection').classList.remove('hidden');
+    document.getElementById('criticalText').textContent = data.critical_thinking;
   }
 }
+
+function renderList(sid, lid, arr, fn) {
+  if (!arr?.length) return;
+  document.getElementById(sid).classList.remove('hidden');
+  document.getElementById(lid).innerHTML = arr.map(fn).join('');
+}
+
+function esc(t) {
+  return String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function fmt(s) { return `${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`; }
 </script>
 {% endblock %}

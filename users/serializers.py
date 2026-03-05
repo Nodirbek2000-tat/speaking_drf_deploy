@@ -60,6 +60,12 @@ class UserSerializer(serializers.ModelSerializer):
     referral_link = serializers.SerializerMethodField()
     avg_rating = serializers.SerializerMethodField()
 
+    mock_count = serializers.SerializerMethodField()
+    free_mock_limit = serializers.SerializerMethodField()
+    free_ai_message_limit = serializers.SerializerMethodField()
+    free_chat_limit = serializers.SerializerMethodField()
+    is_limited = serializers.SerializerMethodField()
+
     class Meta:
         model = User
         fields = [
@@ -68,8 +74,11 @@ class UserSerializer(serializers.ModelSerializer):
             'is_premium', 'premium_expires', 'has_premium',
             'referral_code', 'referral_link', 'can_search',
             'chat_count', 'practice_count', 'ielts_count', 'cefr_count',
+            'ai_message_count', 'mock_count',
             'free_searches_used', 'is_online', 'last_seen',
             'avg_rating', 'created_at',
+            'free_mock_limit', 'free_ai_message_limit', 'free_chat_limit',
+            'is_limited',
         ]
         read_only_fields = ['referral_code', 'chat_count', 'practice_count', 'is_online']
 
@@ -80,7 +89,48 @@ class UserSerializer(serializers.ModelSerializer):
         return obj.can_search_partner
 
     def get_referral_link(self, obj):
-        return f"https://t.me/your_bot?start=ref_{obj.referral_code}"
+        from django.conf import settings as dj_settings
+        bot_username = getattr(dj_settings, 'BOT_USERNAME', 'tilchi_aibot').lstrip('@')
+        return f"https://t.me/{bot_username}?start=ref_{obj.referral_code}"
+
+    def get_mock_count(self, obj):
+        return obj.practice_count or 0
+
+    def get_free_mock_limit(self, obj):
+        try:
+            from webapp.models import AppSettings
+            return AppSettings.get().free_practice_limit
+        except Exception:
+            return 2
+
+    def get_free_ai_message_limit(self, obj):
+        try:
+            from webapp.models import AppSettings
+            return AppSettings.get().free_ai_message_limit
+        except Exception:
+            return 40
+
+    def get_free_chat_limit(self, obj):
+        try:
+            from webapp.models import AppSettings
+            return AppSettings.get().free_calls_limit
+        except Exception:
+            return 5
+
+    def get_is_limited(self, obj):
+        """True if free limits are exhausted and user is not premium"""
+        if obj.has_premium_active:
+            return False
+        try:
+            from webapp.models import AppSettings
+            s = AppSettings.get()
+            if (obj.practice_count or 0) >= s.free_practice_limit:
+                return True
+            if (obj.ai_message_count or 0) >= s.free_ai_message_limit:
+                return True
+        except Exception:
+            pass
+        return False
 
     def get_avg_rating(self, obj):
         ratings = obj.received_ratings.all()

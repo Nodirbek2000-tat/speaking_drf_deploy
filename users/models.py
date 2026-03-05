@@ -10,7 +10,6 @@ class User(AbstractUser):
     bio = models.TextField(blank=True)
     native_language = models.CharField(max_length=50, default='Uzbek')
     target_level = models.CharField(max_length=10, default='B2')
-
     is_premium = models.BooleanField(default=False)
     premium_expires = models.DateTimeField(null=True, blank=True)
 
@@ -24,6 +23,9 @@ class User(AbstractUser):
     ielts_count = models.PositiveIntegerField(default=0)
     cefr_count = models.PositiveIntegerField(default=0)
     free_searches_used = models.PositiveIntegerField(default=0)
+    ai_message_count = models.PositiveIntegerField(default=0)
+
+    phone_number = models.CharField(max_length=20, blank=True, default='')
 
     GENDER_CHOICES = [('male', 'Male'), ('female', 'Female'), ('other', 'Other')]
     gender = models.CharField(max_length=10, choices=GENDER_CHOICES, blank=True, default='')

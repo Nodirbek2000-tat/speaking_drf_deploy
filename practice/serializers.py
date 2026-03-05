@@ -16,7 +16,7 @@ class PracticeScenarioSerializer(serializers.ModelSerializer):
         model = PracticeScenario
         fields = [
             "id", "category", "category_name", "category_icon",
-            "title", "description", "difficulty",
+            "title", "description", "ai_role", "difficulty",
             "what_to_expect", "duration_minutes", "is_active",
         ]
 

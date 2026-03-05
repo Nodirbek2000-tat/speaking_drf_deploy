@@ -1,318 +1,546 @@
 {% extends 'webapp/base.html' %}
-{% block title %}My Progress — Speaking Bot{% endblock %}
+{% load static %}
+
+{% block title %}My Progress{% endblock %}
 
 {% block content %}
-<div class="safe-bottom overflow-y-auto" id="mainContent">
-  <!-- Header -->
-  <div class="safe-top px-5 pb-2 flex items-center gap-3">
-    <a href="/webapp/home/" class="w-9 h-9 rounded-xl bg-white/5 flex items-center justify-center flex-shrink-0">
-      <svg class="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
-    </a>
-    <div>
-      <h1 class="text-xl font-bold text-white">My Progress</h1>
-      <p class="text-xs text-slate-400">Track your English learning journey</p>
-    </div>
-    {% if is_premium %}
-    <div class="badge-premium ml-auto">👑</div>
-    {% endif %}
+<div style="padding:20px 16px 8px;">
+  <h1 style="font-size:22px;font-weight:700;color:#fff;margin:0;">📈 My Progress</h1>
+  <p style="font-size:13px;color:#9ca3af;margin:4px 0 0;">Ingliz tili rivojlanishingiz</p>
+</div>
+
+{% if not is_premium %}
+<div style="margin:12px 16px;background:linear-gradient(135deg,#1a1a3e,#2a1a4e);border:1px solid #6366f1;border-radius:16px;padding:20px;text-align:center;">
+  <div style="font-size:36px;margin-bottom:12px;">💎</div>
+  <h3 style="font-size:16px;font-weight:700;color:#fff;margin:0 0 8px;">Premium kerak</h3>
+  <p style="font-size:13px;color:#a5b4fc;margin:0 0 16px;">Batafsil tahlil va AI maslahatlari faqat Premium foydalanuvchilar uchun.</p>
+  <a href="/webapp/premium/" style="display:inline-block;background:#6366f1;color:#fff;padding:10px 24px;border-radius:12px;font-size:14px;font-weight:600;text-decoration:none;">
+    💎 Premium olish
+  </a>
+</div>
+{% endif %}
+
+<!-- ── Umumiy statistika ──────────────────────────────────────────────── -->
+<div style="padding:0 16px;display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px;">
+  <div style="background:#1a1a2e;border:1px solid #374151;border-radius:14px;padding:14px;text-align:center;">
+    <div style="font-size:24px;font-weight:800;color:#6366f1;">{{ voice_rooms_count }}</div>
+    <div style="font-size:12px;color:#9ca3af;margin-top:4px;">💬 Jami suhbat</div>
   </div>
-
-  <div class="px-4 pb-24 space-y-4">
-
-    <!-- Stats overview -->
-    <div class="grid grid-cols-3 gap-3">
-      <div class="card p-3 text-center">
-        <div class="text-2xl font-black text-white">{{ ielts_count }}</div>
-        <div class="text-xs text-slate-400 mt-0.5">IELTS</div>
-      </div>
-      <div class="card p-3 text-center">
-        <div class="text-2xl font-black text-white">{{ cefr_count }}</div>
-        <div class="text-xs text-slate-400 mt-0.5">CEFR</div>
-      </div>
-      <div class="card p-3 text-center">
-        <div class="text-2xl font-black text-brand">{{ voice_rooms_count }}</div>
-        <div class="text-xs text-slate-400 mt-0.5">Calls</div>
-      </div>
-    </div>
-
-    <!-- IELTS Chart -->
-    <div class="card p-4">
-      <div class="flex items-center justify-between mb-4">
-        <div>
-          <p class="text-sm font-bold text-white">IELTS Speaking</p>
-          <p class="text-xs text-slate-400">Band score trend</p>
-        </div>
-        <div id="ieltsLatest" class="text-right"></div>
-      </div>
-      <div id="ieltsChart" style="height:120px;position:relative">
-        <canvas id="ieltsCanvas"></canvas>
-        <div id="ieltsEmpty" class="hidden absolute inset-0 flex items-center justify-center">
-          <p class="text-slate-500 text-sm">No IELTS tests yet</p>
-        </div>
-      </div>
-    </div>
-
-    <!-- CEFR Chart -->
-    <div class="card p-4">
-      <div class="flex items-center justify-between mb-4">
-        <div>
-          <p class="text-sm font-bold text-white">CEFR Mock</p>
-          <p class="text-xs text-slate-400">Score out of 75</p>
-        </div>
-        <div id="cefrLatest" class="text-right"></div>
-      </div>
-      <div id="cefrChart" style="height:120px;position:relative">
-        <canvas id="cefrCanvas"></canvas>
-        <div id="cefrEmpty" class="hidden absolute inset-0 flex items-center justify-center">
-          <p class="text-slate-500 text-sm">No CEFR tests yet</p>
-        </div>
-      </div>
-    </div>
-
-    <!-- Practice Chart -->
-    {% if practice_count > 0 %}
-    <div class="card p-4">
-      <div class="flex items-center justify-between mb-4">
-        <div>
-          <p class="text-sm font-bold text-white">Practice Sessions</p>
-          <p class="text-xs text-slate-400">Performance score</p>
-        </div>
-        <div id="practiceLatest" class="text-right"></div>
-      </div>
-      <div style="height:120px;position:relative">
-        <canvas id="practiceCanvas"></canvas>
-      </div>
-    </div>
-    {% endif %}
-
-    <!-- AI Problems Analysis -->
-    <div class="card p-4">
-      <div class="flex items-center gap-3 mb-3">
-        <div class="w-10 h-10 rounded-xl bg-brand/15 flex items-center justify-center text-xl flex-shrink-0">🤖</div>
-        <div>
-          <p class="text-sm font-bold text-white">AI Analysis</p>
-          <p class="text-xs text-slate-400">Personalized advice</p>
-        </div>
-        {% if not is_premium %}
-        <div class="ml-auto badge-premium text-xs">👑 Premium</div>
-        {% endif %}
-      </div>
-      {% if is_premium %}
-      <button onclick="loadAnalysis()" id="analysisBtn"
-        class="w-full py-3 rounded-xl bg-brand/10 text-brand text-sm font-semibold border border-brand/20 active:scale-95 transition-transform">
-        🔍 Analyze My Weaknesses
-      </button>
-      <div id="analysisContent" class="hidden mt-4 space-y-3"></div>
-      {% else %}
-      <div class="text-center py-4">
-        <p class="text-sm text-slate-400 mb-3">Get detailed AI analysis of your weaknesses</p>
-        <a href="/webapp/premium/" class="inline-block py-2 px-5 rounded-xl bg-gold/15 text-gold text-sm font-semibold border border-gold/25">
-          Upgrade to Premium
-        </a>
-      </div>
-      {% endif %}
-    </div>
-
-    <!-- Tips based on data -->
-    <div class="card p-4" id="tipsCard">
-      <p class="text-sm font-bold text-white mb-3">💡 Study Tips</p>
-      <div id="tipsList" class="space-y-2"></div>
-    </div>
-
+  <div style="background:#1a1a2e;border:1px solid #374151;border-radius:14px;padding:14px;text-align:center;">
+    <div style="font-size:24px;font-weight:800;color:#10b981;">{{ practice_count }}</div>
+    <div style="font-size:12px;color:#9ca3af;margin-top:4px;">🎤 Practice</div>
+  </div>
+  <div style="background:#1a1a2e;border:1px solid #374151;border-radius:14px;padding:14px;text-align:center;">
+    <div style="font-size:24px;font-weight:800;color:#f59e0b;">{{ ielts_count }}</div>
+    <div style="font-size:12px;color:#9ca3af;margin-top:4px;">📝 IELTS Mock</div>
+  </div>
+  <div style="background:#1a1a2e;border:1px solid #374151;border-radius:14px;padding:14px;text-align:center;">
+    <div style="font-size:24px;font-weight:800;color:#8b5cf6;">{{ cefr_count }}</div>
+    <div style="font-size:12px;color:#9ca3af;margin-top:4px;">🎓 CEFR Mock</div>
   </div>
 </div>
-{% endblock %}
 
-{% block extra_scripts %}
+{% if is_premium %}
+
+<!-- ── Practice o'rtacha ballari ──────────────────────────────────────── -->
+{% if practice_count %}
+<div style="padding:0 16px;margin-bottom:16px;">
+  <div style="background:#1a1a2e;border:1px solid #374151;border-radius:16px;padding:16px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+      <h3 style="font-size:15px;font-weight:600;color:#fff;margin:0;">🎯 O'rtacha balllar</h3>
+      {% if score_trend > 0 %}
+        <span style="font-size:12px;color:#10b981;font-weight:600;">+{{ score_trend }} ↑ o'sish</span>
+      {% elif score_trend < 0 %}
+        <span style="font-size:12px;color:#ef4444;font-weight:600;">{{ score_trend }} ↓ tushish</span>
+      {% else %}
+        <span style="font-size:12px;color:#9ca3af;">Barqaror</span>
+      {% endif %}
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+      <div id="score-card" style="background:#0f0f13;border-radius:12px;padding:12px;text-align:center;">
+        <div style="font-size:28px;font-weight:800;color:#6366f1;">{{ avg_score }}</div>
+        <div style="font-size:11px;color:#9ca3af;margin-top:2px;">Umumiy ball</div>
+        <div style="margin-top:8px;background:#374151;border-radius:4px;height:6px;">
+          <div style="width:{{ avg_score }}%;height:100%;background:#6366f1;border-radius:4px;"></div>
+        </div>
+      </div>
+      <div style="background:#0f0f13;border-radius:12px;padding:12px;text-align:center;">
+        <div style="font-size:28px;font-weight:800;color:#10b981;">{{ avg_grammar }}</div>
+        <div style="font-size:11px;color:#9ca3af;margin-top:2px;">Grammatika</div>
+        <div style="margin-top:8px;background:#374151;border-radius:4px;height:6px;">
+          <div style="width:{{ avg_grammar }}%;height:100%;background:#10b981;border-radius:4px;"></div>
+        </div>
+      </div>
+      <div style="background:#0f0f13;border-radius:12px;padding:12px;text-align:center;">
+        <div style="font-size:28px;font-weight:800;color:#f59e0b;">{{ avg_vocab }}</div>
+        <div style="font-size:11px;color:#9ca3af;margin-top:2px;">Lug'at</div>
+        <div style="margin-top:8px;background:#374151;border-radius:4px;height:6px;">
+          <div style="width:{{ avg_vocab }}%;height:100%;background:#f59e0b;border-radius:4px;"></div>
+        </div>
+      </div>
+      <div style="background:#0f0f13;border-radius:12px;padding:12px;text-align:center;">
+        <div style="font-size:28px;font-weight:800;color:#8b5cf6;">{{ avg_fluency }}</div>
+        <div style="font-size:11px;color:#9ca3af;margin-top:2px;">Ravonlik</div>
+        <div style="margin-top:8px;background:#374151;border-radius:4px;height:6px;">
+          <div style="width:{{ avg_fluency }}%;height:100%;background:#8b5cf6;border-radius:4px;"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<!-- ── Kunlik Reja (Daily Plan) ───────────────────────────────────────── -->
+<div style="padding:0 16px;margin-bottom:16px;">
+  <div style="background:#1a1a2e;border:1px solid #374151;border-radius:16px;padding:16px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+      <h3 style="font-size:15px;font-weight:600;color:#fff;margin:0;">📅 Bugungi Kunlik Reja</h3>
+      <span style="font-size:11px;color:#9ca3af;">AI maslahat</span>
+    </div>
+    <div id="daily-plan-container">
+      {% if daily_plan != '[]' %}
+        <div id="daily-plan-static"></div>
+      {% else %}
+        <div style="text-align:center;padding:16px;">
+          <div style="font-size:28px;margin-bottom:8px;">🎯</div>
+          <p style="font-size:13px;color:#9ca3af;margin:0;">Practice qilgandan so'ng AI sizga kunlik reja tuzib beradi.</p>
+          <a href="/webapp/practice/" style="display:inline-block;margin-top:12px;background:#6366f1;color:#fff;padding:8px 20px;border-radius:10px;font-size:13px;font-weight:600;text-decoration:none;">
+            🎤 Practice boshlash
+          </a>
+        </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<!-- ── Tenses Statistics ──────────────────────────────────────────────── -->
+<div style="padding:0 16px;margin-bottom:16px;">
+  <div style="background:#1a1a2e;border:1px solid #374151;border-radius:16px;padding:16px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+      <h3 style="font-size:15px;font-weight:600;color:#fff;margin:0;">⏰ Tenses Statistics</h3>
+      <span style="font-size:11px;color:#9ca3af;">Oxirgi 30 kun</span>
+    </div>
+    <div id="tenses-container">
+      <div style="text-align:center;padding:20px;color:#6b7280;font-size:13px;">⏳ Yuklanmoqda...</div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Practice Score grafigi ─────────────────────────────────────────── -->
+{% if practice_data and practice_data != '[]' %}
+<div style="padding:0 16px;margin-bottom:16px;">
+  <div style="background:#1a1a2e;border:1px solid #374151;border-radius:16px;padding:16px;">
+    <h3 style="font-size:15px;font-weight:600;color:#fff;margin:0 0 14px;">🎤 Practice ball tarixi</h3>
+    <canvas id="practice-chart" height="120"></canvas>
+  </div>
+</div>
+{% endif %}
+
+<!-- ── IELTS Band grafigi ─────────────────────────────────────────────── -->
+{% if ielts_data and ielts_data != '[]' %}
+<div style="padding:0 16px;margin-bottom:16px;">
+  <div style="background:#1a1a2e;border:1px solid #374151;border-radius:16px;padding:16px;">
+    <h3 style="font-size:15px;font-weight:600;color:#fff;margin:0 0 14px;">📝 IELTS Band tarixi</h3>
+    <canvas id="ielts-chart" height="120"></canvas>
+
+    <!-- Oxirgi IELTS per-part scores -->
+    <div id="ielts-parts" style="margin-top:14px;display:none;">
+      <div style="font-size:12px;color:#9ca3af;margin-bottom:8px;">Oxirgi imtihon qismlari:</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">
+        <div style="background:#0f0f13;border-radius:10px;padding:10px;text-align:center;">
+          <div id="ielts-p1" style="font-size:20px;font-weight:800;color:#f59e0b;">—</div>
+          <div style="font-size:10px;color:#9ca3af;margin-top:2px;">Part 1</div>
+        </div>
+        <div style="background:#0f0f13;border-radius:10px;padding:10px;text-align:center;">
+          <div id="ielts-p2" style="font-size:20px;font-weight:800;color:#f59e0b;">—</div>
+          <div style="font-size:10px;color:#9ca3af;margin-top:2px;">Part 2</div>
+        </div>
+        <div style="background:#0f0f13;border-radius:10px;padding:10px;text-align:center;">
+          <div id="ielts-p3" style="font-size:20px;font-weight:800;color:#f59e0b;">—</div>
+          <div style="font-size:10px;color:#9ca3af;margin-top:2px;">Part 3</div>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:8px;">
+        <div style="font-size:11px;color:#6b7280;">Fluency: <span id="ielts-fl" style="color:#a5b4fc;font-weight:600;">—</span></div>
+        <div style="font-size:11px;color:#6b7280;">Lexical: <span id="ielts-lx" style="color:#a5b4fc;font-weight:600;">—</span></div>
+        <div style="font-size:11px;color:#6b7280;">Grammar: <span id="ielts-gr" style="color:#a5b4fc;font-weight:600;">—</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── CEFR grafigi ──────────────────────────────────────────────────── -->
+{% if cefr_data and cefr_data != '[]' %}
+<div style="padding:0 16px;margin-bottom:16px;">
+  <div style="background:#1a1a2e;border:1px solid #374151;border-radius:16px;padding:16px;">
+    <h3 style="font-size:15px;font-weight:600;color:#fff;margin:0 0 14px;">🎓 CEFR Score tarixi</h3>
+    <canvas id="cefr-chart" height="120"></canvas>
+
+    <!-- Oxirgi CEFR per-part scores -->
+    <div id="cefr-parts" style="margin-top:14px;display:none;">
+      <div style="font-size:12px;color:#9ca3af;margin-bottom:8px;">Oxirgi imtihon qismlari:</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:6px;">
+        <div style="background:#0f0f13;border-radius:10px;padding:8px;text-align:center;">
+          <div id="cefr-p1" style="font-size:18px;font-weight:800;color:#8b5cf6;">—</div>
+          <div style="font-size:10px;color:#9ca3af;margin-top:1px;">Part 1</div>
+        </div>
+        <div style="background:#0f0f13;border-radius:10px;padding:8px;text-align:center;">
+          <div id="cefr-p2" style="font-size:18px;font-weight:800;color:#8b5cf6;">—</div>
+          <div style="font-size:10px;color:#9ca3af;margin-top:1px;">Part 2</div>
+        </div>
+        <div style="background:#0f0f13;border-radius:10px;padding:8px;text-align:center;">
+          <div id="cefr-p3" style="font-size:18px;font-weight:800;color:#8b5cf6;">—</div>
+          <div style="font-size:10px;color:#9ca3af;margin-top:1px;">Part 3</div>
+        </div>
+        <div style="background:#0f0f13;border-radius:10px;padding:8px;text-align:center;">
+          <div id="cefr-p4" style="font-size:18px;font-weight:800;color:#8b5cf6;">—</div>
+          <div style="font-size:10px;color:#9ca3af;margin-top:1px;">Part 4</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+{% endif %}
+
+<!-- ── AI Maslahati ───────────────────────────────────────────────────── -->
+<div style="padding:0 16px;margin-bottom:16px;">
+  <div style="background:#1a1a2e;border:1px solid #374151;border-radius:16px;padding:16px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+      <h3 style="font-size:15px;font-weight:600;color:#fff;margin:0;">🤖 AI Tahlil va Maslahat</h3>
+      <button id="analyze-btn" onclick="loadAIAnalysis()"
+        style="padding:6px 14px;background:#6366f1;border:none;border-radius:10px;color:#fff;font-size:12px;font-weight:600;cursor:pointer;">
+        Tahlil qilish
+      </button>
+    </div>
+    <div id="ai-analysis-container">
+      <p style="font-size:13px;color:#9ca3af;margin:0;">
+        AI sizning barcha natijalaringizni tahlil qilib, eng zaif tomonlaringizni va qanday yaxshilash kerakligini ko'rsatadi.
+      </p>
+    </div>
+  </div>
+</div>
+
+<!-- ── Critical Thinking ─────────────────────────────────────────────── -->
+<div style="padding:0 16px;margin-bottom:100px;">
+  <div style="background:#1a1a2e;border:1px solid #374151;border-radius:16px;padding:16px;">
+    <h3 style="font-size:15px;font-weight:600;color:#fff;margin:0 0 14px;">🧠 Critical Thinking</h3>
+    <div id="critical-thinking-container">
+      {% if critical_thinking %}
+        <div style="background:#0f0f13;border-radius:12px;padding:14px;">
+          <p style="font-size:13px;color:#d1d5db;line-height:1.6;margin:0;">{{ critical_thinking }}</p>
+        </div>
+      {% else %}
+        <p style="font-size:13px;color:#9ca3af;margin:0;">
+          Practice va IELTS javoblaringizdan critical thinking ko'rsatkichlari tahlil qilinadi.
+          "Tahlil qilish" tugmasini bosing.
+        </p>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+{% else %}
+<div style="height:80px;"></div>
+{% endif %}
+
+<!-- Chart.js CDN -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+
 <script>
-document.querySelectorAll('.nav-item').forEach(el => {
-  if (el.getAttribute('href') === '/webapp/home/') el.classList.add('active');
-});
-
 const ieltsData = {{ ielts_data|safe }};
 const cefrData = {{ cefr_data|safe }};
 const practiceData = {{ practice_data|safe }};
+const dailyPlanData = {{ daily_plan|safe }};
 
-// ── Mini chart helper ─────────────────────────────────────
-function drawLineChart(canvasId, labels, values, maxVal, color, emptyId) {
-  if (!values.length) {
-    if (emptyId) document.getElementById(emptyId).classList.remove('hidden');
-    return;
+// ── Sahifa yuklanganda ─────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  loadTenseStats();
+  if (ieltsData.length >= 1) {
+    if (ieltsData.length > 1) drawIELTSChart();
+    showIELTSParts();
   }
-  const canvas = document.getElementById(canvasId);
-  if (!canvas) return;
-  const ctx = canvas.getContext('2d');
-  canvas.width = canvas.offsetWidth || canvas.parentElement.offsetWidth || 300;
-  canvas.height = canvas.offsetParent ? canvas.parentElement.offsetHeight : 120;
-  const W = canvas.width, H = canvas.height;
-  const pad = { top: 10, right: 15, bottom: 22, left: 28 };
-  const chartW = W - pad.left - pad.right;
-  const chartH = H - pad.top - pad.bottom;
-  const min = Math.max(0, Math.min(...values) - (maxVal * 0.1));
-  const max = maxVal;
-  const range = max - min || 1;
-
-  ctx.clearRect(0, 0, W, H);
-
-  // Grid lines
-  ctx.strokeStyle = 'rgba(255,255,255,0.05)';
-  ctx.lineWidth = 1;
-  [0.25, 0.5, 0.75, 1].forEach(f => {
-    const y = pad.top + chartH * (1 - f);
-    ctx.beginPath(); ctx.moveTo(pad.left, y); ctx.lineTo(W - pad.right, y); ctx.stroke();
-  });
-
-  const xStep = values.length > 1 ? chartW / (values.length - 1) : chartW;
-  const pts = values.map((v, i) => ({
-    x: pad.left + (values.length > 1 ? i * xStep : chartW / 2),
-    y: pad.top + chartH * (1 - (v - min) / range)
-  }));
-
-  // Gradient fill
-  const grad = ctx.createLinearGradient(0, pad.top, 0, pad.top + chartH);
-  grad.addColorStop(0, color + '40');
-  grad.addColorStop(1, color + '05');
-  ctx.beginPath();
-  ctx.moveTo(pts[0].x, pad.top + chartH);
-  pts.forEach(p => ctx.lineTo(p.x, p.y));
-  ctx.lineTo(pts[pts.length-1].x, pad.top + chartH);
-  ctx.closePath();
-  ctx.fillStyle = grad;
-  ctx.fill();
-
-  // Line
-  ctx.beginPath();
-  ctx.strokeStyle = color;
-  ctx.lineWidth = 2;
-  ctx.lineJoin = 'round';
-  pts.forEach((p, i) => i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y));
-  ctx.stroke();
-
-  // Dots
-  pts.forEach((p, i) => {
-    ctx.beginPath();
-    ctx.arc(p.x, p.y, 3.5, 0, Math.PI * 2);
-    ctx.fillStyle = color;
-    ctx.fill();
-    ctx.strokeStyle = '#1a1a22';
-    ctx.lineWidth = 1.5;
-    ctx.stroke();
-  });
-
-  // X labels
-  ctx.fillStyle = '#475569';
-  ctx.font = '9px system-ui';
-  ctx.textAlign = 'center';
-  const step = values.length > 6 ? Math.ceil(values.length / 6) : 1;
-  pts.forEach((p, i) => {
-    if (i % step === 0) ctx.fillText(labels[i] || '', p.x, H - 4);
-  });
-
-  // Y labels
-  ctx.textAlign = 'right';
-  ctx.fillText(min.toFixed(1), pad.left - 4, pad.top + chartH);
-  ctx.fillText(max.toFixed(1), pad.left - 4, pad.top + 8);
-}
-
-// ── Render charts ──────────────────────────────────────────
-window.addEventListener('load', () => {
-  // IELTS
-  if (ieltsData.length) {
-    const labels = ieltsData.map(d => d.date);
-    const vals = ieltsData.map(d => d.band);
-    drawLineChart('ieltsCanvas', labels, vals, 9, '#6366f1', null);
-    const latest = vals[vals.length - 1];
-    const change = vals.length > 1 ? (vals[vals.length-1] - vals[0]).toFixed(1) : null;
-    document.getElementById('ieltsLatest').innerHTML =
-      `<div class="text-lg font-black text-white">Band ${latest}</div>` +
-      (change !== null ? `<div class="text-xs ${change >= 0 ? 'text-green-400' : 'text-red-400'}">${change >= 0 ? '+' : ''}${change}</div>` : '');
-  } else {
-    document.getElementById('ieltsEmpty').classList.remove('hidden');
+  if (cefrData.length >= 1) {
+    if (cefrData.length > 1) drawCEFRChart();
+    showCEFRParts();
   }
-
-  // CEFR
-  if (cefrData.length) {
-    const labels = cefrData.map(d => d.date);
-    const vals = cefrData.map(d => d.score);
-    drawLineChart('cefrCanvas', labels, vals, 75, '#10b981', null);
-    const latest = cefrData[cefrData.length - 1];
-    const change = vals.length > 1 ? vals[vals.length-1] - vals[0] : null;
-    document.getElementById('cefrLatest').innerHTML =
-      `<div class="text-lg font-black text-white">${latest.level}</div>` +
-      `<div class="text-xs text-slate-400">${latest.score}/75</div>` +
-      (change !== null ? `<div class="text-xs ${change >= 0 ? 'text-green-400' : 'text-red-400'}">${change >= 0 ? '+' : ''}${change} pts</div>` : '');
-  } else {
-    document.getElementById('cefrEmpty').classList.remove('hidden');
-  }
-
-  // Practice
-  if (practiceData.length) {
-    const labels = practiceData.map(d => d.date);
-    const vals = practiceData.map(d => d.score);
-    drawLineChart('practiceCanvas', labels, vals, 100, '#f59e0b', null);
-    const latest = vals[vals.length - 1];
-    document.getElementById('practiceLatest').innerHTML =
-      `<div class="text-lg font-black text-white">${latest}%</div>`;
-  }
-
-  // Tips
-  buildTips();
+  if (practiceData.length > 1) drawPracticeChart();
+  renderDailyPlan();
 });
 
-function buildTips() {
-  const tips = [];
-  if (!ieltsData.length) tips.push('Take an IELTS Mock to measure your speaking level.');
-  if (!cefrData.length) tips.push('Try a CEFR Mock to find your English proficiency level.');
-  if (ieltsData.length >= 2) {
-    const change = ieltsData[ieltsData.length-1].band - ieltsData[0].band;
-    if (change < 0) tips.push('Your IELTS score dropped. Try AI Speaking Practice to improve fluency.');
-    else if (change > 0) tips.push('Your IELTS score improved! Keep up the good work.');
-  }
-  if (cefrData.length >= 2) {
-    const change = cefrData[cefrData.length-1].score - cefrData[0].score;
-    if (change < 0) tips.push('CEFR score dropped. Focus on vocabulary and grammar practice.');
-  }
-  if (tips.length === 0) {
-    tips.push('Practice speaking every day for best results.');
-    tips.push('Use AI Speaking to get instant feedback on your English.');
-  }
-  const list = document.getElementById('tipsList');
-  list.innerHTML = tips.map(t =>
-    `<div class="flex items-start gap-2"><span class="text-brand mt-0.5 flex-shrink-0">•</span><span class="text-sm text-slate-300">${t}</span></div>`
-  ).join('');
+// ── IELTS per-part scores ──────────────────────────────────────────────
+function showIELTSParts() {
+  const last = ieltsData[ieltsData.length - 1];
+  if (!last) return;
+  const el = document.getElementById('ielts-parts');
+  if (el) el.style.display = 'block';
+  if (last.p1) document.getElementById('ielts-p1').textContent = last.p1;
+  if (last.p2) document.getElementById('ielts-p2').textContent = last.p2;
+  if (last.p3) document.getElementById('ielts-p3').textContent = last.p3;
+  if (last.fluency) document.getElementById('ielts-fl').textContent = last.fluency;
+  if (last.lexical) document.getElementById('ielts-lx').textContent = last.lexical;
+  if (last.grammar) document.getElementById('ielts-gr').textContent = last.grammar;
 }
 
-// ── AI Analysis ─────────────────────────────────────────────
-async function loadAnalysis() {
-  const btn = document.getElementById('analysisBtn');
-  const content = document.getElementById('analysisContent');
-  btn.textContent = '⏳ Analyzing...';
-  btn.disabled = true;
-  try {
-    const r = await fetch('/webapp/progress/problems/', { credentials: 'same-origin' });
-    const d = await r.json();
-    if (d.ok) {
-      const a = d.analysis;
-      btn.classList.add('hidden');
-      content.classList.remove('hidden');
-      content.innerHTML = `
-        ${(a.problems||[]).map((p, i) => `
-          <div class="bg-dark-800 rounded-xl p-3" style="background:#242430">
-            <div class="text-sm font-semibold text-white mb-1">${i+1}. ${p}</div>
-            ${a.exercises && a.exercises[i] ? `<div class="text-xs text-slate-400">💡 ${a.exercises[i]}</div>` : ''}
-          </div>
-        `).join('')}
-        ${a.timeline ? `<div class="text-xs text-slate-400 text-center pt-1">⏱ ${a.timeline}</div>` : ''}
-      `;
-    } else {
-      btn.textContent = '🔍 Analyze My Weaknesses';
-      btn.disabled = false;
-      showToast(d.error || 'Error', 'error');
+// ── CEFR per-part scores ───────────────────────────────────────────────
+function showCEFRParts() {
+  const last = cefrData[cefrData.length - 1];
+  if (!last) return;
+  const el = document.getElementById('cefr-parts');
+  if (el) el.style.display = 'block';
+  if (last.p1) document.getElementById('cefr-p1').textContent = last.p1;
+  if (last.p2) document.getElementById('cefr-p2').textContent = last.p2;
+  if (last.p3) document.getElementById('cefr-p3').textContent = last.p3;
+  if (last.p4) document.getElementById('cefr-p4').textContent = last.p4;
+}
+
+// ── Kunlik Reja ────────────────────────────────────────────────────────
+function renderDailyPlan() {
+  const container = document.getElementById('daily-plan-static');
+  if (!container || !dailyPlanData.length) return;
+
+  const savedChecks = JSON.parse(localStorage.getItem('dailyPlanChecks') || '{}');
+  const today = new Date().toDateString();
+  const checks = savedChecks[today] || {};
+
+  const items = dailyPlanData.map((task, i) => {
+    const done = checks[i] || false;
+    return `
+    <div onclick="toggleTask(${i})" style="display:flex;align-items:flex-start;gap:12px;padding:12px;background:#0f0f13;border-radius:12px;margin-bottom:8px;cursor:pointer;transition:opacity 0.2s;${done ? 'opacity:0.5;' : ''}">
+      <div id="check-${i}" style="width:22px;height:22px;border-radius:50%;border:2px solid ${done ? '#10b981' : '#374151'};background:${done ? '#10b981' : 'transparent'};flex-shrink:0;display:flex;align-items:center;justify-content:center;margin-top:1px;transition:all 0.2s;">
+        ${done ? '<span style="color:#fff;font-size:12px;">✓</span>' : ''}
+      </div>
+      <p id="task-text-${i}" style="font-size:13px;color:${done ? '#6b7280' : '#d1d5db'};margin:0;line-height:1.5;${done ? 'text-decoration:line-through;' : ''}">${task}</p>
+    </div>`;
+  }).join('');
+
+  container.innerHTML = items;
+}
+
+function toggleTask(i) {
+  const savedChecks = JSON.parse(localStorage.getItem('dailyPlanChecks') || '{}');
+  const today = new Date().toDateString();
+  if (!savedChecks[today]) savedChecks[today] = {};
+  savedChecks[today][i] = !savedChecks[today][i];
+  localStorage.setItem('dailyPlanChecks', JSON.stringify(savedChecks));
+  renderDailyPlan();
+}
+
+// ── Grafiklar ──────────────────────────────────────────────────────────
+function drawIELTSChart() {
+  const ctx = document.getElementById('ielts-chart');
+  if (!ctx) return;
+  new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: ieltsData.map(d => d.date),
+      datasets: [{
+        label: 'IELTS Band',
+        data: ieltsData.map(d => d.band),
+        borderColor: '#f59e0b',
+        backgroundColor: '#f59e0b20',
+        tension: 0.4, fill: true,
+        pointBackgroundColor: '#f59e0b', pointRadius: 5,
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: { legend: { display: false } },
+      scales: {
+        y: { min: 0, max: 9, ticks: { color: '#9ca3af', stepSize: 1.5 }, grid: { color: '#374151' } },
+        x: { ticks: { color: '#9ca3af' }, grid: { color: '#374151' } }
+      }
     }
-  } catch {
-    btn.textContent = '🔍 Analyze My Weaknesses';
+  });
+}
+
+function drawCEFRChart() {
+  const ctx = document.getElementById('cefr-chart');
+  if (!ctx) return;
+  new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: cefrData.map(d => d.date),
+      datasets: [{
+        label: 'CEFR Score',
+        data: cefrData.map(d => d.score),
+        borderColor: '#8b5cf6',
+        backgroundColor: '#8b5cf620',
+        tension: 0.4, fill: true,
+        pointBackgroundColor: '#8b5cf6', pointRadius: 5,
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: (ctx) => {
+              const d = cefrData[ctx.dataIndex];
+              return `Score: ${d.score} (${d.level})`;
+            }
+          }
+        }
+      },
+      scales: {
+        y: { min: 0, max: 75, ticks: { color: '#9ca3af' }, grid: { color: '#374151' } },
+        x: { ticks: { color: '#9ca3af' }, grid: { color: '#374151' } }
+      }
+    }
+  });
+}
+
+function drawPracticeChart() {
+  const ctx = document.getElementById('practice-chart');
+  if (!ctx) return;
+  new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: practiceData.map(d => d.date),
+      datasets: [
+        {
+          label: 'Umumiy', data: practiceData.map(d => d.score),
+          borderColor: '#6366f1', backgroundColor: '#6366f120',
+          tension: 0.4, fill: true, pointBackgroundColor: '#6366f1', pointRadius: 4,
+        },
+        {
+          label: 'Grammatika', data: practiceData.map(d => d.grammar),
+          borderColor: '#10b981', backgroundColor: 'transparent',
+          tension: 0.4, borderDash: [4,4], pointRadius: 3,
+        },
+        {
+          label: 'Ravonlik', data: practiceData.map(d => d.fluency),
+          borderColor: '#8b5cf6', backgroundColor: 'transparent',
+          tension: 0.4, borderDash: [4,4], pointRadius: 3,
+        },
+      ]
+    },
+    options: {
+      responsive: true,
+      plugins: { legend: { labels: { color: '#9ca3af', font: { size: 11 } } } },
+      scales: {
+        y: { min: 0, max: 100, ticks: { color: '#9ca3af' }, grid: { color: '#374151' } },
+        x: { ticks: { color: '#9ca3af' }, grid: { color: '#374151' } }
+      }
+    }
+  });
+}
+
+// ── Tenses Stats ───────────────────────────────────────────────────────
+async function loadTenseStats() {
+  try {
+    const r = await fetch('/api/users/tense-stats/', { credentials: 'include' });
+    if (!r.ok) throw new Error();
+    const data = await r.json();
+    renderTenses(data.tense_stats || data);
+  } catch(e) {
+    document.getElementById('tenses-container').innerHTML =
+      '<p style="font-size:13px;color:#6b7280;text-align:center;">Ma\'lumot yo\'q</p>';
+  }
+}
+
+function renderTenses(stats) {
+  const el = document.getElementById('tenses-container');
+  if (!el) return;
+  if (!stats || !Object.keys(stats).length) {
+    el.innerHTML = '<p style="font-size:13px;color:#6b7280;text-align:center;">Hali ma\'lumot yo\'q. Practice qiling!</p>';
+    return;
+  }
+
+  const rows = Object.entries(stats).map(([name, data]) => {
+    const pct = typeof data === 'object' ? (data.percent || 0) : data;
+    const total = typeof data === 'object' ? (data.total || 0) : 0;
+    const correct = typeof data === 'object' ? (data.correct || 0) : 0;
+    const color = pct >= 80 ? '#10b981' : pct >= 60 ? '#f59e0b' : '#ef4444';
+    const emoji = pct >= 80 ? '✅' : pct >= 60 ? '⚠️' : '❌';
+
+    return `
+    <div style="margin-bottom:12px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+        <span style="font-size:13px;color:#d1d5db;">${emoji} ${name}</span>
+        <span style="font-size:13px;font-weight:700;color:${color};">${pct}%</span>
+      </div>
+      <div style="background:#374151;border-radius:4px;height:8px;overflow:hidden;">
+        <div style="width:${pct}%;height:100%;background:${color};border-radius:4px;transition:width 0.8s ease;"></div>
+      </div>
+      ${total ? `<div style="font-size:11px;color:#6b7280;margin-top:2px;">${correct}/${total} to'g'ri</div>` : ''}
+    </div>`;
+  }).join('');
+
+  el.innerHTML = rows;
+}
+
+// ── AI Tahlil ──────────────────────────────────────────────────────────
+let analysisLoaded = false;
+
+async function loadAIAnalysis() {
+  if (analysisLoaded) return;
+
+  const btn = document.getElementById('analyze-btn');
+  const container = document.getElementById('ai-analysis-container');
+  const ctContainer = document.getElementById('critical-thinking-container');
+
+  btn.textContent = '⏳ Tahlil...';
+  btn.disabled = true;
+  container.innerHTML = `
+    <div style="text-align:center;padding:20px;">
+      <div style="font-size:32px;margin-bottom:12px;">🤖</div>
+      <p style="font-size:14px;color:#9ca3af;">AI natijalaringizni tahlil qilmoqda...</p>
+    </div>`;
+
+  try {
+    const r = await fetch('/webapp/progress/problems/', { credentials: 'include' });
+    const data = await r.json();
+
+    if (!data.ok) {
+      container.innerHTML = `<p style="color:#ef4444;font-size:13px;">${data.error || 'Xato yuz berdi'}</p>`;
+      btn.textContent = 'Qayta';
+      btn.disabled = false;
+      return;
+    }
+
+    const analysis = data.analysis;
+    analysisLoaded = true;
+    btn.textContent = '✅ Tahlil qilindi';
+
+    const problems = analysis.problems || [];
+    const exercises = analysis.exercises || [];
+
+    let problemsHtml = '';
+    problems.forEach((p, i) => {
+      const ex = exercises[i] || '';
+      problemsHtml += `
+      <div style="background:#0f0f13;border-radius:12px;padding:14px;margin-bottom:10px;">
+        <div style="font-size:13px;font-weight:600;color:#ef4444;margin-bottom:6px;">❌ ${p}</div>
+        ${ex ? `<div style="font-size:12px;color:#9ca3af;line-height:1.6;">💡 ${ex}</div>` : ''}
+      </div>`;
+    });
+
+    const strengths = (analysis.strengths || []).map(s =>
+      `<div style="font-size:13px;color:#10b981;margin-bottom:6px;">✅ ${s}</div>`
+    ).join('');
+
+    container.innerHTML = `
+      ${strengths ? `<div style="margin-bottom:12px;">${strengths}</div>` : ''}
+      <div style="margin-bottom:12px;">
+        <div style="font-size:13px;font-weight:600;color:#fff;margin-bottom:10px;">🔍 Asosiy muammolar:</div>
+        ${problemsHtml || '<p style="font-size:13px;color:#10b981;">Katta muammo topilmadi! 🎉</p>'}
+      </div>
+      ${analysis.overall_advice ? `<div style="background:#6366f115;border:1px solid #6366f1;border-radius:10px;padding:12px;"><div style="font-size:13px;color:#a5b4fc;">💬 ${analysis.overall_advice}</div></div>` : ''}
+      ${analysis.timeline ? `<div style="margin-top:8px;background:#6366f110;border-radius:10px;padding:10px;"><div style="font-size:12px;color:#a5b4fc;">⏱ ${analysis.timeline}</div></div>` : ''}`;
+
+    if (analysis.critical_thinking) {
+      ctContainer.innerHTML = `
+        <div style="background:#0f0f13;border-radius:12px;padding:14px;">
+          <p style="font-size:13px;color:#d1d5db;line-height:1.6;margin:0;">${analysis.critical_thinking}</p>
+        </div>`;
+    }
+
+  } catch(e) {
+    container.innerHTML = '<p style="color:#ef4444;font-size:13px;">Server bilan bog\'lanishda xato</p>';
+    btn.textContent = 'Qayta';
     btn.disabled = false;
-    showToast('Network error', 'error');
   }
 }
 </script>

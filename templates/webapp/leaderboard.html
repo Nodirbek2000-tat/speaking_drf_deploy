@@ -1,90 +1,184 @@
 {% extends 'webapp/base.html' %}
-{% block title %}Leaderboard — Speaking Bot{% endblock %}
+{% load static %}
+
+{% block title %}Leaderboard{% endblock %}
 
 {% block content %}
-<div class="safe-bottom overflow-y-auto">
-  <!-- Header -->
-  <div class="safe-top px-5 pb-3">
-    <h1 class="text-xl font-bold text-white">Leaderboard</h1>
-    <p class="text-xs text-slate-400">Top 20 most active speakers</p>
-  </div>
-
-  <!-- My Rank Banner -->
-  {% if my_rank %}
-  <div class="mx-4 mb-4 card p-4 flex items-center gap-3" style="background:rgba(99,102,241,0.1);border-color:rgba(99,102,241,0.25)">
-    <div class="w-10 h-10 rounded-xl bg-brand/20 flex items-center justify-center text-lg font-black text-brand">#{{ my_rank }}</div>
-    <div>
-      <div class="text-sm font-semibold text-white">Your Rank</div>
-      <div class="text-xs text-slate-400">Keep talking to climb higher!</div>
-    </div>
-    <svg class="w-5 h-5 text-brand ml-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"/></svg>
-  </div>
-  {% endif %}
-
-  <div class="px-4 space-y-2 pb-4">
-    {% for entry in board %}
-    <div class="card p-4 flex items-center gap-3 {% if entry.is_me %}border-brand/30{% endif %}"
-         {% if entry.is_me %}style="background:rgba(99,102,241,0.05);border-color:rgba(99,102,241,0.3)"{% endif %}>
-
-      <!-- Rank -->
-      <div class="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 text-lg font-black
-        {% if entry.rank == 1 %}text-yellow-400{% elif entry.rank == 2 %}text-slate-300{% elif entry.rank == 3 %}text-amber-600{% else %}text-slate-500{% endif %}"
-        style="{% if entry.rank <= 3 %}background:rgba(255,255,255,0.05){% else %}{% endif %}">
-        {% if entry.rank == 1 %}🥇
-        {% elif entry.rank == 2 %}🥈
-        {% elif entry.rank == 3 %}🥉
-        {% else %}{{ entry.rank }}{% endif %}
-      </div>
-
-      <!-- Avatar -->
-      <div class="w-10 h-10 rounded-full bg-gradient-to-br from-slate-600 to-slate-700 flex items-center justify-center text-sm font-bold text-white flex-shrink-0">
-        {{ entry.name|first|upper }}
-      </div>
-
-      <!-- Info -->
-      <div class="flex-1 min-w-0">
-        <div class="flex items-center gap-1.5">
-          <span class="text-sm font-semibold text-white truncate">{{ entry.name }}</span>
-          {% if entry.is_me %}<span class="text-xs text-brand font-medium">(You)</span>{% endif %}
-          {% if entry.is_premium %}<span class="text-xs text-gold">👑</span>{% endif %}
-        </div>
-        <div class="flex items-center gap-2 mt-0.5">
-          <span class="text-xs text-slate-400">{{ entry.total_rooms }} conversations</span>
-          {% if entry.rating_count > 0 %}
-          <span class="text-slate-600">·</span>
-          <div class="flex items-center gap-0.5">
-            <span class="text-xs text-gold">★</span>
-            <span class="text-xs text-slate-300 font-medium">{{ entry.avg_rating }}</span>
-            <span class="text-xs text-slate-500">({{ entry.rating_count }})</span>
-          </div>
-          {% endif %}
-        </div>
-      </div>
-
-      <!-- Score bar -->
-      {% if board.0.total_rooms > 0 %}
-      <div class="w-16 h-1.5 bg-dark-700 rounded-full overflow-hidden" style="background:#242430">
-        <div class="h-full rounded-full {% if entry.rank == 1 %}bg-yellow-400{% elif entry.is_me %}bg-brand{% else %}bg-slate-500{% endif %}"
-             style="width: {% widthratio entry.total_rooms board.0.total_rooms 100 %}%"></div>
-      </div>
-      {% endif %}
-    </div>
-    {% empty %}
-    <div class="flex flex-col items-center justify-center py-16 text-center">
-      <div class="text-6xl mb-4">🏆</div>
-      <p class="text-lg font-semibold text-white mb-2">No rankings yet</p>
-      <p class="text-sm text-slate-400">Start talking to appear on the leaderboard!</p>
-      <a href="/webapp/speaking/" class="btn-primary mt-6" style="width:auto;padding:12px 24px">Start Speaking</a>
-    </div>
-    {% endfor %}
+<div style="padding:20px 20px 8px;display:flex;align-items:center;justify-content:space-between;">
+  <div>
+    <h1 style="font-size:22px;font-weight:700;color:#fff;margin:0;">🏆 Leaderboard</h1>
+    <p style="font-size:13px;color:#9ca3af;margin:4px 0 0;">Oxirgi 30 kun eng faol foydalanuvchilar</p>
   </div>
 </div>
-{% endblock %}
 
-{% block extra_scripts %}
+<!-- Sort tabs -->
+<div style="padding:0 16px 16px;display:flex;gap:8px;overflow-x:auto;">
+  <button class="sort-btn active" data-sort="chat_count" onclick="setSort('chat_count')"
+    style="padding:7px 14px;border-radius:20px;border:1px solid #6366f1;background:#6366f1;color:#fff;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;">
+    💬 Calls
+  </button>
+  <button class="sort-btn" data-sort="avg_rating" onclick="setSort('avg_rating')"
+    style="padding:7px 14px;border-radius:20px;border:1px solid #374151;background:transparent;color:#9ca3af;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;">
+    ⭐ Rating
+  </button>
+  <button class="sort-btn" data-sort="practice_count" onclick="setSort('practice_count')"
+    style="padding:7px 14px;border-radius:20px;border:1px solid #374151;background:transparent;color:#9ca3af;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;">
+    🎤 Practice
+  </button>
+  <button class="sort-btn" data-sort="ielts_count" onclick="setSort('ielts_count')"
+    style="padding:7px 14px;border-radius:20px;border:1px solid #374151;background:transparent;color:#9ca3af;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;">
+    📝 IELTS
+  </button>
+</div>
+
+<!-- My rank banner -->
+<div id="my-rank-banner" style="margin:0 16px 16px;background:#6366f115;border:1px solid #6366f1;border-radius:14px;padding:12px 16px;display:none;align-items:center;gap:12px;">
+  <div id="my-rank-num" style="font-size:20px;font-weight:800;color:#6366f1;width:32px;text-align:center;"></div>
+  <div id="my-rank-avatar" style="width:40px;height:40px;border-radius:50%;background:#6366f1;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700;color:#fff;overflow:hidden;flex-shrink:0;"></div>
+  <div style="flex:1;">
+    <div style="font-size:13px;font-weight:600;color:#a5b4fc;">Sizning o'rningiz</div>
+    <div id="my-rank-stats" style="font-size:12px;color:#9ca3af;"></div>
+  </div>
+</div>
+
+<!-- Leaders list -->
+<div id="leaders-list" style="padding:0 16px 100px;">
+  <div style="text-align:center;padding:40px;color:#6b7280;font-size:14px;">⏳ Yuklanmoqda...</div>
+</div>
+
+<style>
+.sort-btn { transition:all 0.2s; }
+.leader-card { animation: slideIn 0.3s ease; }
+@keyframes slideIn { from{opacity:0;transform:translateX(-10px)} to{opacity:1;transform:translateX(0)} }
+</style>
+
 <script>
-document.querySelectorAll('.nav-item').forEach(el => {
-  if (el.getAttribute('href') === '/webapp/leaderboard/') el.classList.add('active');
+let currentSort = 'chat_count';
+let leadersData = [];
+
+const SORT_LABELS = {
+  chat_count: {label:'ta call', icon:'💬'},
+  avg_rating: {label:'avg rating', icon:'⭐'},
+  practice_count: {label:'ta practice', icon:'🎤'},
+  ielts_count: {label:'ta IELTS', icon:'📝'},
+};
+
+const MEDALS = {1:'🥇', 2:'🥈', 3:'🥉'};
+
+document.addEventListener('DOMContentLoaded', () => {
+  loadLeaderboard();
 });
+
+async function loadLeaderboard() {
+  try {
+    const r = await fetch(`/webapp/bot-api/leaderboard/?sort_by=${currentSort}&limit=30`, {credentials:'include'});
+    const data = await r.json();
+    leadersData = data.leaders || [];
+    const myRank = data.my_rank;
+
+    renderLeaders(leadersData);
+
+    // My rank banner
+    if (myRank) {
+      document.getElementById('my-rank-banner').style.display = 'flex';
+      document.getElementById('my-rank-num').textContent = `#${myRank.rank}`;
+      const avatarEl = document.getElementById('my-rank-avatar');
+      if (myRank.photo_url) {
+        avatarEl.innerHTML = `<img src="${myRank.photo_url}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">`;
+      } else {
+        avatarEl.textContent = (myRank.full_name || 'U')[0].toUpperCase();
+      }
+      const val = myRank[currentSort] || 0;
+      const lbl = SORT_LABELS[currentSort];
+      document.getElementById('my-rank-stats').textContent = `${val} ${lbl.label} · ⭐ ${myRank.avg_rating || '—'}`;
+    }
+  } catch(e) {
+    document.getElementById('leaders-list').innerHTML =
+      '<div style="text-align:center;padding:40px;color:#ef4444;">⚠️ Yuklab bo\'lmadi</div>';
+  }
+}
+
+function renderLeaders(leaders) {
+  const el = document.getElementById('leaders-list');
+  if (!leaders.length) {
+    el.innerHTML = '<div style="text-align:center;padding:40px;color:#6b7280;font-size:14px;">Hali ma\'lumot yo\'q</div>';
+    return;
+  }
+
+  const lbl = SORT_LABELS[currentSort];
+
+  // Top 3 podium
+  const top3 = leaders.slice(0,3);
+  let podiumHtml = `<div style="display:flex;align-items:flex-end;justify-content:center;gap:12px;margin-bottom:24px;padding:16px 0;">`;
+
+  const ORDER = [1, 0, 2]; // 2nd, 1st, 3rd visual order
+  const HEIGHTS = [80, 100, 60];
+
+  ORDER.forEach((idx, visualPos) => {
+    if (!top3[idx]) return;
+    const u = top3[idx];
+    const rank = idx + 1;
+    const medal = MEDALS[rank];
+    const val = u[currentSort] || 0;
+    const h = HEIGHTS[visualPos];
+    const isFirst = rank === 1;
+
+    podiumHtml += `
+    <div style="display:flex;flex-direction:column;align-items:center;flex:1;">
+      <div style="position:relative;margin-bottom:8px;">
+        <div style="width:${isFirst?'64px':'52px'};height:${isFirst?'64px':'52px'};border-radius:50%;background:#374151;display:flex;align-items:center;justify-content:center;font-size:${isFirst?'24px':'18px'};font-weight:700;color:#fff;overflow:hidden;border:2px solid ${isFirst?'#f59e0b':'#374151'};">
+          ${u.photo_url ? `<img src="${u.photo_url}" style="width:100%;height:100%;object-fit:cover;">` : (u.full_name||'U')[0].toUpperCase()}
+        </div>
+        <div style="position:absolute;top:-8px;right:-8px;font-size:18px;">${medal}</div>
+      </div>
+      <div style="font-size:11px;font-weight:600;color:#fff;text-align:center;max-width:70px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${u.full_name||u.username||'User'}</div>
+      <div style="font-size:12px;color:#6366f1;font-weight:700;">${val} ${lbl.icon}</div>
+      ${u.is_premium ? '<div style="font-size:10px;color:#f59e0b;">💎</div>' : ''}
+      <div style="width:100%;height:${h}px;background:linear-gradient(to top,#6366f1,#8b5cf6);border-radius:8px 8px 0 0;margin-top:8px;"></div>
+    </div>`;
+  });
+  podiumHtml += '</div>';
+
+  // Rest of list (4-30)
+  const restHtml = leaders.slice(3).map((u, i) => {
+    const rank = i + 4;
+    const val = u[currentSort] || 0;
+    const avg = u.avg_rating ? `⭐ ${u.avg_rating}` : '';
+
+    return `
+    <div class="leader-card" style="display:flex;align-items:center;gap:12px;background:#1a1a2e;border:1px solid #374151;border-radius:14px;padding:12px 14px;margin-bottom:8px;">
+      <div style="width:28px;text-align:center;font-size:14px;font-weight:700;color:#9ca3af;flex-shrink:0;">#${rank}</div>
+      <div style="width:44px;height:44px;border-radius:50%;background:#374151;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:700;color:#fff;overflow:hidden;flex-shrink:0;">
+        ${u.photo_url ? `<img src="${u.photo_url}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">` : (u.full_name||'U')[0].toUpperCase()}
+      </div>
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:14px;font-weight:600;color:#fff;display:flex;align-items:center;gap:6px;">
+          ${u.full_name||u.username||'User'}
+          ${u.is_premium ? '<span style="font-size:12px;">💎</span>' : ''}
+        </div>
+        <div style="font-size:12px;color:#9ca3af;">${avg}</div>
+      </div>
+      <div style="text-align:right;flex-shrink:0;">
+        <div style="font-size:15px;font-weight:700;color:#6366f1;">${val}</div>
+        <div style="font-size:11px;color:#9ca3af;">${lbl.label}</div>
+      </div>
+    </div>`;
+  }).join('');
+
+  el.innerHTML = podiumHtml + restHtml;
+}
+
+function setSort(sort) {
+  currentSort = sort;
+  document.querySelectorAll('.sort-btn').forEach(btn => {
+    const isActive = btn.dataset.sort === sort;
+    btn.style.background = isActive ? '#6366f1' : 'transparent';
+    btn.style.color = isActive ? '#fff' : '#9ca3af';
+    btn.style.borderColor = isActive ? '#6366f1' : '#374151';
+  });
+  document.getElementById('leaders-list').innerHTML =
+    '<div style="text-align:center;padding:40px;color:#6b7280;font-size:14px;">⏳ Yuklanmoqda...</div>';
+  loadLeaderboard();
+}
 </script>
 {% endblock %}
