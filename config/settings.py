@@ -473,11 +473,23 @@ X_FRAME_OPTIONS = 'ALLOWALL'
 
 # ─── OpenAI & Bot ─────────────────────────────────────────────────────────────
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY', '')
+GEMINI_API_KEY  = os.getenv('GEMINI_API_KEY', '')
 BOT_SECRET = os.getenv('BOT_SECRET', 'speaking-bot-secret-key-2024')
 ADMIN_CHAT_IDS = os.getenv('ADMIN_CHAT_IDS', '')
 TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN', '')
 TELEGRAM_PAYMENT_CHAT = os.getenv('TELEGRAM_PAYMENT_CHAT', '@nodirbek_shukurov1')
 BOT_USERNAME = os.getenv('BOT_USERNAME', '')
+
+# ─── Cache (Redis) ────────────────────────────────────────────────────────────
+REDIS_URL = os.getenv('REDIS_URL', 'redis://localhost:6379/0')
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.redis.RedisCache',
+        'LOCATION': REDIS_URL,
+        'TIMEOUT': 300,
+        'KEY_PREFIX': 'speaking_drf',
+    }
+}
 
 # ─── Celery ───────────────────────────────────────────────────────────────────
 CELERY_BROKER_URL = os.getenv('CELERY_BROKER_URL', 'redis://localhost:6379/1')
@@ -498,6 +510,11 @@ CELERY_BEAT_SCHEDULE = {
     'check-pending-practice': {
         'task': 'webapp.tasks.run_pending_practice_analyses',
         'schedule': crontab(minute='*/15'),
+    },
+    # Har kuni 10:00 — premium 3 kun qolganlarni ogohlantirish
+    'premium-expiry-warnings': {
+        'task': 'users.tasks.send_premium_expiry_warnings',
+        'schedule': crontab(hour=10, minute=0),
     },
 }
 

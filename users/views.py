@@ -300,6 +300,16 @@ class BotStatisticsView(APIView):
 
         top_words = [{"word": w, "count": c} for w, c in Counter(all_words).most_common(10)]
 
+        # Premium status
+        has_premium = False
+        premium_expires_iso = None
+        try:
+            drf_user = User.objects.get(telegram_id=telegram_id)
+            has_premium = drf_user.has_premium_active
+            premium_expires_iso = drf_user.premium_expires.isoformat() if drf_user.premium_expires else None
+        except User.DoesNotExist:
+            pass
+
         return Response({
             "total_mocks": len(ielts_acts) + len(cefr_acts),
             "total_ielts": len(ielts_acts),
@@ -317,6 +327,9 @@ class BotStatisticsView(APIView):
             "last_ielts_band": ielts_history[-1]['band'] if ielts_history else None,
             "last_cefr_score": cefr_history[-1]['score'] if cefr_history else None,
             "last_cefr_level": cefr_history[-1]['level'] if cefr_history else None,
+            # Premium
+            "has_premium": has_premium,
+            "premium_expires": premium_expires_iso,
         })
 
 
@@ -393,7 +406,7 @@ class UserTenseStatsView(APIView):
     def get(self, request):
         from datetime import timedelta
         user = request.user
-        telegram_id = str(user.telegram_id) if user.telegram_id else None
+        telegram_id = user.telegram_id
         if not telegram_id:
             return Response({"today": {}, "monthly": {}})
 

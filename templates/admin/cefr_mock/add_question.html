@@ -1,0 +1,152 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+
+{% block title %}{{ title }}{% endblock %}
+{% block content_title %}<h1>{{ title }}</h1>{% endblock %}
+
+{% block content %}
+<style>
+  .add-form {
+    max-width: 680px;
+    background: #fff;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    padding: 28px 32px;
+    box-shadow: 0 1px 4px rgba(0,0,0,.07);
+  }
+  .form-group { margin-bottom: 20px; }
+  .form-group label {
+    display: block;
+    font-weight: 600;
+    font-size: 13px;
+    margin-bottom: 6px;
+    color: #333;
+  }
+  .form-group textarea,
+  .form-group input[type="text"],
+  .form-group select {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    font-size: 14px;
+    box-sizing: border-box;
+    font-family: inherit;
+  }
+  .form-group textarea { min-height: 90px; resize: vertical; }
+  .form-group textarea:focus,
+  .form-group input[type="text"]:focus,
+  .form-group select:focus {
+    outline: none;
+    border-color: #417690;
+    box-shadow: 0 0 0 2px rgba(65,118,144,.2);
+  }
+  .help-text { font-size: 12px; color: #888; margin-top: 4px; }
+  .btn-row { display: flex; gap: 12px; margin-top: 24px; }
+  .btn-save {
+    background: #417690;
+    color: #fff;
+    border: none;
+    padding: 9px 22px;
+    border-radius: 5px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .btn-save:hover { background: #2c5f7a; }
+  .btn-back {
+    background: #f0f0f0;
+    color: #444;
+    border: 1px solid #ccc;
+    padding: 9px 22px;
+    border-radius: 5px;
+    font-size: 14px;
+    font-weight: 600;
+    text-decoration: none;
+    display: inline-block;
+  }
+  .btn-back:hover { background: #e0e0e0; }
+  .section-badge {
+    display: inline-block;
+    background: #e8f4fd;
+    color: #2980b9;
+    border-radius: 4px;
+    padding: 3px 10px;
+    font-size: 12px;
+    font-weight: 600;
+    margin-bottom: 20px;
+  }
+</style>
+
+<div class="add-form">
+  <div class="section-badge">{{ part_label }}</div>
+
+  <form method="post">
+    {% csrf_token %}
+    <input type="hidden" name="part" value="{{ part }}">
+    {% if sub_part %}<input type="hidden" name="sub_part" value="{{ sub_part }}">{% endif %}
+
+    <!-- Question text -->
+    <div class="form-group">
+      <label for="question">
+        {% if is_p3 %}Muhokama mavzusi *{% else %}Savol matni *{% endif %}
+      </label>
+      <textarea id="question" name="question" placeholder="{% if is_p3 %}Masalan: Social media has more benefits than drawbacks.{% else %}Savolni kiriting...{% endif %}"></textarea>
+    </div>
+
+    <!-- Instruction (Part 1.2 and Part 2) -->
+    {% if is_p1_2 or part == '2' %}
+    <div class="form-group">
+      <label for="instruction">Ko'rsatma (instruction)</label>
+      <textarea id="instruction" name="instruction" style="min-height:60px;"
+        placeholder="Foydalanuvchiga ko'rsatma, masalan: Compare these two images..."></textarea>
+      <p class="help-text">Ixtiyoriy — agar ko'rsatma kerak bo'lsa kiriting.</p>
+    </div>
+    {% endif %}
+
+    <!-- Part 1.2: 2 image fields -->
+    {% if is_p1_2 %}
+    <div class="form-group">
+      <label for="telegram_file_id">1-rasm Telegram File ID</label>
+      <input type="text" id="telegram_file_id" name="telegram_file_id"
+             placeholder="AgACAgIAAxkB...">
+      <p class="help-text">Botga rasm yuborib, file_id ni oling.</p>
+    </div>
+    <div class="form-group">
+      <label for="telegram_file_id2">2-rasm Telegram File ID</label>
+      <input type="text" id="telegram_file_id2" name="telegram_file_id2"
+             placeholder="AgACAgIAAxkB...">
+      <p class="help-text">Part 1.2 uchun 2-rasm.</p>
+    </div>
+    {% endif %}
+
+    <!-- Part 2: single image optional -->
+    {% if part == '2' and not is_p1_2 %}
+    <div class="form-group">
+      <label for="telegram_file_id">Rasm Telegram File ID (ixtiyoriy)</label>
+      <input type="text" id="telegram_file_id" name="telegram_file_id"
+             placeholder="AgACAgIAAxkB...">
+      <p class="help-text">Cue card uchun rasm kerak bo'lsa kiriting.</p>
+    </div>
+    {% endif %}
+
+    <!-- Part 3: stance selector -->
+    {% if is_p3 %}
+    <div class="form-group">
+      <label for="stance">Pozitsiya *</label>
+      <select id="stance" name="stance">
+        <option value="">— Tanlang —</option>
+        <option value="FOR" {% if stance == 'FOR' %}selected{% endif %}>FOR (Tarafdor)</option>
+        <option value="AGAINST" {% if stance == 'AGAINST' %}selected{% endif %}>AGAINST (Qarshi)</option>
+      </select>
+      <p class="help-text">Bot foydalanuvchiga FOR yoki AGAINST pozitsiyadan gapirishni aytadi.</p>
+    </div>
+    {% endif %}
+
+    <div class="btn-row">
+      <button type="submit" class="btn-save">✅ Saqlash</button>
+      <a href="{{ back_url }}" class="btn-back">← Orqaga</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

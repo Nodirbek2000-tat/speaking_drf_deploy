@@ -474,11 +474,13 @@ def send_daily_progress_reports():
     # Active userlar: oxirgi 7 kunda biror narsa qilgan
     active_users = User.objects.filter(
         telegram_id__isnull=False,
-        last_activity__gte=week_ago
-    ).exclude(telegram_id='')[:200]
+        updated_at__gte=week_ago
+    ).exclude(telegram_id=None)[:200]
 
     sent = 0
+    total = 0
     for user in active_users:
+        total += 1
         try:
             text = _build_daily_report(user, now, week_ago, two_weeks_ago)
             if not text:
@@ -498,7 +500,7 @@ def send_daily_progress_reports():
         except Exception as e:
             logger.warning(f"[daily_report] user={user.telegram_id} error: {e}")
 
-    logger.info(f"[daily_report] sent={sent}/{active_users.count()}")
+    logger.info(f"[daily_report] sent={sent}/{total}")
     return {'status': 'ok', 'sent': sent}
 
 
@@ -507,6 +509,8 @@ def _build_daily_report(user, now, week_ago, two_weeks_ago) -> str:
     from ielts_mock.models import IELTSSession
     from cefr_mock.models import CEFRSession
     from practice.models import PracticeSession
+    from users.models import UserTenseStats
+    from datetime import timedelta
 
     lines = [f"📊 <b>{user.first_name or 'Salom'}, bugungi progress:</b>\n"]
     has_data = False
@@ -604,10 +608,41 @@ def _build_daily_report(user, now, week_ago, two_weeks_ago) -> str:
                     lines.append(f"   ↓ {diff} ball kamaydi 📉")
         lines.append("")
 
+    # ── Tense statistikasi (oxirgi 7 kun) ────────────────────────────────────
+    if user.telegram_id and user.has_premium_active:
+        today = now.date()
+        week_start = today - timedelta(days=7)
+        tense_qs = UserTenseStats.objects.filter(
+            telegram_id=user.telegram_id,
+            date__gte=week_start,
+        )
+        tense_summary = {}
+        for ts in tense_qs:
+            if ts.tense_name not in tense_summary:
+                tense_summary[ts.tense_name] = {'usage': 0, 'correct': 0}
+            tense_summary[ts.tense_name]['usage'] += ts.usage_count
+            tense_summary[ts.tense_name]['correct'] += ts.correct_count
+
+        weak_tenses = []
+        for tense, v in tense_summary.items():
+            if v['usage'] > 0:
+                pct = round(v['correct'] / v['usage'] * 100)
+                if pct < 70:
+                    emoji = '⚠️' if pct >= 50 else '❌'
+                    weak_tenses.append((pct, f"{emoji} {tense}: {pct}%"))
+
+        if weak_tenses:
+            has_data = True
+            weak_tenses.sort(key=lambda x: x[0])
+            lines.append("⏰ <b>Zaif zamonlar (bu hafta):</b>")
+            for _, t in weak_tenses[:4]:
+                lines.append(f"   {t}")
+            lines.append("")
+
     if not has_data:
         return ""  # Hech qanday faollik yo'q — xabar yubormaymiz
 
     lines.append("💪 Har kuni mashq qiling — muvaffaqiyat sizniki!")
-    lines.append("📱 <a href='https://t.me/tilchi_aibot'>Web App → My Progress</a>")
+    lines.append("📱 <b>My Progress:</b> /progress buyrug'ini yuboring")
 
     return "\n".join(lines)

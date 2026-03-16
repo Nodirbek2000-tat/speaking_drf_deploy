@@ -8,7 +8,11 @@ class PremiumPlan(models.Model):
     price_uzs = models.PositiveIntegerField(default=0, help_text="Narx (so\'m)")
     duration_days = models.PositiveIntegerField()
     description = models.TextField()
-    features = models.JSONField(default=list, help_text='Premium xususiyatlari ro\'yxati')
+    features = models.JSONField(
+        default=list,
+        editable=False,
+        help_text='Premium xususiyatlari (statik, admin panelda o\'zgarmaydi)'
+    )
     is_active = models.BooleanField(default=True)
     order = models.PositiveSmallIntegerField(default=0)
 

@@ -126,6 +126,7 @@ class BotVocabularyView(APIView):
         words = list(Word.objects.filter(level=level).order_by("?")[:20])
         data = [
             {
+                "id": w.id,
                 "word": w.word,
                 "level": w.level,
                 "definition": w.definition,

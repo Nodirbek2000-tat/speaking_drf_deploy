@@ -78,3 +78,5 @@ zope.interface==8.2
 psycopg2-binary
 whitenoise
 channels-redis
+google-generativeai
+google-genai

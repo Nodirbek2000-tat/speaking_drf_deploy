@@ -40,9 +40,9 @@ class AppSettings(models.Model):
         help_text="Bitta user nechta mock test topshira oladi (IELTS+CEFR hammasi)"
     )
     free_ai_message_limit = models.PositiveIntegerField(
-        default=40,
-        verbose_name="Bepul AI xabarlari soni",
-        help_text="Premium bo'lmagan user nechta AI chat xabari yuborishi mumkin"
+        default=35,
+        verbose_name="Bepul xabarlar soni (AI chat + so'z qidirish)",
+        help_text="Premium bo'lmagan user nechta ovozli xabar + so'z qidirishi mumkin (bot)"
     )
 
     # ── Premium eslatma ────────────────────────────────────────────────
@@ -54,11 +54,11 @@ class AppSettings(models.Model):
 
     # ── Referral ───────────────────────────────────────────────────────
     referrals_for_premium = models.PositiveIntegerField(
-        default=5,
+        default=3,
         verbose_name="Premium uchun talab qilinadigan referallar soni"
     )
     referral_premium_days = models.PositiveIntegerField(
-        default=30,
+        default=5,
         verbose_name="Referal orqali beriladigan premium (kun)"
     )
 

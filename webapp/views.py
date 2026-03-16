@@ -509,7 +509,8 @@ def premium(request):
     ref_count = Referral.objects.filter(referrer=user).count()
     ref_premium_count = Referral.objects.filter(referrer=user, premium_granted=True).count()
 
-    referral_link = f"https://t.me/speaking_bot?start=ref_{user.referral_code}"
+    bot_username_cfg = getattr(settings, 'BOT_USERNAME', 'speaking_engbot')
+    referral_link = f"https://t.me/{bot_username_cfg}?start=ref_{user.referral_code}"
     referrals_needed = settings_obj.referrals_for_premium
     premium_days = settings_obj.referral_premium_days
 
@@ -522,6 +523,9 @@ def premium(request):
         'Do\'st bilan ustuvor juftlash',
     ]
 
+    first_plan = plans.first()
+    plan_price_uzs = first_plan.price_uzs if first_plan else 49000
+
     return render(request, 'webapp/premium.html', {
         'user': user,
         'card': card,
@@ -533,6 +537,7 @@ def premium(request):
         'is_premium': user.has_premium_active,
         'premium_expires': user.premium_expires,
         'features': features,
+        'plan_price_uzs': plan_price_uzs,
     })
 
 
@@ -619,13 +624,19 @@ def _check_bot_secret(request):
 
 
 @webapp_login_required
+@webapp_login_required
 def progress(request):
-    """Progress page with charts and AI daily plan"""
+    """Progress page with charts and AI daily plan — Premium only"""
     from ielts_mock.models import IELTSSession
     from cefr_mock.models import CEFRSession
     from practice.models import PracticeSession
 
     user = request.user
+
+    # Premium bo'lmasa — premium sahifasiga yo'naltirish
+    if not user.has_premium_active:
+        return redirect('/webapp/premium/')
+
 
     ielts_sessions = list(IELTSSession.objects.filter(
         user=user, is_completed=True
@@ -754,105 +765,131 @@ def progress(request):
 
 @webapp_login_required
 def my_problems_ai(request):
-    """AI sizning barcha natijalaringizni tahlil qiladi"""
+    """AI sizning barcha natijalaringizni tahlil qiladi — history bilan"""
     user = request.user
     if not user.has_premium_active:
         return JsonResponse({'error': 'Premium talab qilinadi'}, status=403)
 
+    from django.core.cache import cache
     from ielts_mock.models import IELTSSession
     from cefr_mock.models import CEFRSession
     from practice.models import PracticeSession
+    from users.models import AIAdviceHistory, UserTenseStats
     import openai
 
-    # Oxirgi natijalarni yig'ish
+    # Redis cache tekshirish (5 daqiqa)
+    cache_key = f'ai_advice_{user.id}'
+    cached = cache.get(cache_key)
+    if cached:
+        return JsonResponse({'ok': True, 'analysis': cached, 'from_cache': True})
+
+    # ── Ma'lumotlarni yig'ish ──────────────────────────────────────────────────
     ielts_sessions = list(IELTSSession.objects.filter(
         user=user, is_completed=True
-    ).order_by('-started_at')[:3].values(
-        'overall_band', 'sub_scores', 'mistakes', 'improvements'
+    ).order_by('-started_at')[:5].values(
+        'overall_band', 'sub_scores', 'mistakes', 'improvements', 'started_at'
     ))
 
     cefr_sessions = list(CEFRSession.objects.filter(
         user=user, is_completed=True
-    ).order_by('-started_at')[:3].values('score', 'level', 'feedback'))
+    ).order_by('-started_at')[:5].values('score', 'level', 'feedback', 'started_at'))
 
-    # Practice tense statistikasi
     practice_sessions = list(PracticeSession.objects.filter(
         user=user, is_completed=True, analysis_done=True
-    ).order_by('-started_at')[:5].values(
+    ).order_by('-started_at')[:7].values(
         'overall_score', 'grammar_score', 'vocab_score',
-        'fluency_score', 'tense_stats', 'ai_feedback'
+        'fluency_score', 'tense_stats', 'ai_feedback', 'started_at'
     ))
 
-    # Partner feedbacklari
     feedbacks = list(user.received_voice_ratings.order_by(
         '-created_at'
     )[:10].values('rating', 'comment'))
 
-    # Tenses umumiy statistikasi
-    tense_totals = {}
-    for ps in practice_sessions:
-        ts = ps.get('tense_stats') or {}
-        for tname, tdata in ts.items():
-            if tname not in tense_totals:
-                tense_totals[tname] = {'total': 0, 'correct': 0}
-            if isinstance(tdata, dict):
-                tense_totals[tname]['total'] += tdata.get('total', 0)
-                tense_totals[tname]['correct'] += tdata.get('correct', 0)
+    # ── Tense statistikasi (oxirgi 30 kun) ───────────────────────────────────
+    from datetime import timedelta
+    month_start = timezone.now().date() - timedelta(days=30)
+    tense_qs = UserTenseStats.objects.filter(
+        telegram_id=str(user.telegram_id), date__gte=month_start
+    )
+    tense_summary = {}
+    for s in tense_qs:
+        t = s.tense_name
+        if t not in tense_summary:
+            tense_summary[t] = {'usage': 0, 'correct': 0}
+        tense_summary[t]['usage'] += s.usage_count
+        tense_summary[t]['correct'] += s.correct_count
+    tense_accuracy = {}
+    for t, d in tense_summary.items():
+        tense_accuracy[t] = round(d['correct'] / d['usage'] * 100) if d['usage'] > 0 else 0
 
-    # Eng zaif tenses
-    weak_tenses = []
-    for tname, td in tense_totals.items():
-        if td['total'] > 0:
-            pct = round(td['correct'] / td['total'] * 100)
-            if pct < 70:
-                weak_tenses.append(f"{tname}: {pct}%")
+    weak_tenses = {t: f"{pct}%" for t, pct in tense_accuracy.items() if pct < 70}
+    strong_tenses = {t: f"{pct}%" for t, pct in tense_accuracy.items() if pct >= 80}
 
-    prompt = f"""Analyze this English learner's performance and give advice in Uzbek language.
+    # ── Oldingi maslahat tarixi (kontekst uchun) ─────────────────────────────
+    prev_advice = list(AIAdviceHistory.objects.filter(user=user).order_by('-created_at')[:3].values(
+        'context_summary', 'created_at'
+    ))
+    history_context = ""
+    if prev_advice:
+        history_lines = []
+        for a in prev_advice:
+            date_str = a['created_at'].strftime('%d.%m.%Y')
+            history_lines.append(f"[{date_str}] {a['context_summary']}")
+        history_context = "\n".join(history_lines)
 
-IELTS Results (last 3): {json.dumps(ielts_sessions, default=str)}
-CEFR Results (last 3): {json.dumps(cefr_sessions, default=str)}
-Practice Sessions (last 5): {json.dumps(practice_sessions, default=str)}
-Partner Feedback: {json.dumps(feedbacks, default=str)}
-Weak Tenses: {weak_tenses}
+    # ── AI Prompt ─────────────────────────────────────────────────────────────
+    prompt = f"""You are an expert English language coach. Analyze this learner's data and give PERSONALIZED advice in ENGLISH.
+IMPORTANT: Each advice must be different from previous ones. Build on progress, address NEW weaknesses.
+
+PREVIOUS ADVICE HISTORY (do NOT repeat these):
+{history_context or "No previous advice yet — this is the first analysis."}
+
+CURRENT DATA:
+IELTS Results (last 5): {json.dumps(ielts_sessions, default=str)}
+CEFR Results (last 5): {json.dumps(cefr_sessions, default=str)}
+Practice Sessions (last 7): {json.dumps(practice_sessions, default=str)}
+Partner Ratings: {json.dumps(feedbacks, default=str)}
+Tense Accuracy (30 days): {json.dumps(tense_accuracy)}
+Weak Tenses (<70%): {json.dumps(weak_tenses)}
+Strong Tenses (≥80%): {json.dumps(strong_tenses)}
 
 Return ONLY valid JSON:
 {{
-  "problems": [
-    "Grammar: Past Perfect ni noto'g'ri ishlatish",
-    "Vocabulary: Academic so'zlar kamligi",
-    "Fluency: Ko'p to'xtab qolish"
-  ],
-  "exercises": [
-    "Har kuni 10 ta Past Perfect jumla yozing",
-    "Kuniga 5 ta yangi academic so'z o'rganing",
-    "Mirror oldida 2 daqiqa to'xtovsiz gapiring"
-  ],
-  "timeline": "Bu muammolarni 4-6 haftada yaxshilash mumkin",
-  "critical_thinking": "Sizning javoblaringizda asosiy fikrni qo'llab-quvvatlash uchun misollar kamlik qiladi. Har bir fikringizni 'For example...' yoki 'In my experience...' bilan kengaytiring.",
-  "strengths": [
-    "Pronunciation aniq va tushunarli",
-    "Basic grammar yaxshi"
-  ],
-  "overall_advice": "Eng muhim jihat — tenses va vocabulary. Kuniga 20 daqiqa shu ikki sohaga e'tibor bering."
+  "problems": ["3-4 specific current problems based on data"],
+  "exercises": ["Concrete daily exercises for each problem"],
+  "timeline": "Realistic improvement timeline",
+  "critical_thinking": "How to improve analytical thinking in English responses",
+  "strengths": ["2-3 areas the learner is doing well"],
+  "overall_advice": "1-2 sentence personalized summary based on their unique progress",
+  "context_summary": "One sentence summarizing today's key advice (for next AI call context)"
 }}"""
 
     try:
         client = openai.OpenAI(api_key=settings.OPENAI_API_KEY)
         response = client.chat.completions.create(
-            model='gpt-4o-mini',
+            model='gpt-4o',
             messages=[
-                {
-                    'role': 'system',
-                    'content': 'You are an expert English language coach. Analyze learner data and provide specific, actionable advice in Uzbek language.'
-                },
+                {'role': 'system', 'content': 'You are an expert English language coach. Always give fresh, personalized advice based on the learner\'s actual data.'},
                 {'role': 'user', 'content': prompt}
             ],
             response_format={'type': 'json_object'},
-            max_tokens=1000,
+            max_tokens=1200,
         )
         result = json.loads(response.choices[0].message.content)
+
+        # Tarix sifatida saqlash
+        AIAdviceHistory.objects.create(
+            user=user,
+            advice=result,
+            context_summary=result.get('context_summary', '')
+        )
+
+        # Redis cache (5 daqiqa)
+        cache.set(cache_key, result, 300)
+
         return JsonResponse({'ok': True, 'analysis': result})
     except Exception as e:
+        logger.error(f"[my_problems_ai] error: {e}")
         return JsonResponse({'error': str(e)}, status=500)
 # ─── Bot Admin API ────────────────────────────────────────────────────────────
 
@@ -1002,6 +1039,8 @@ def bot_api_settings(request):
     if request.method == 'GET':
         return JsonResponse({
             'free_calls_limit': s.free_calls_limit,
+            'free_total_mock_limit': s.free_total_mock_limit,
+            'free_ai_message_limit': s.free_ai_message_limit,
             'referrals_for_premium': s.referrals_for_premium,
             'referral_premium_days': s.referral_premium_days,
             'web_app_url': s.web_app_url,
@@ -1011,6 +1050,10 @@ def bot_api_settings(request):
         data = json.loads(request.body)
         if 'free_calls_limit' in data:
             s.free_calls_limit = int(data['free_calls_limit'])
+        if 'free_total_mock_limit' in data:
+            s.free_total_mock_limit = int(data['free_total_mock_limit'])
+        if 'free_ai_message_limit' in data:
+            s.free_ai_message_limit = int(data['free_ai_message_limit'])
         if 'referrals_for_premium' in data:
             s.referrals_for_premium = int(data['referrals_for_premium'])
         if 'referral_premium_days' in data:

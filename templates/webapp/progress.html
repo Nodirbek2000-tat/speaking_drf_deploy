@@ -209,7 +209,7 @@
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
       <h3 style="font-size:15px;font-weight:600;color:#fff;margin:0;">🤖 AI Tahlil va Maslahat</h3>
       <button id="analyze-btn" onclick="loadAIAnalysis()"
-        style="padding:6px 14px;background:#6366f1;border:none;border-radius:10px;color:#fff;font-size:12px;font-weight:600;cursor:pointer;">
+        style="padding:6px 14px;background:#6366f1;border:none;border-radius:10px;color:#fff;font-size:12px;font-weight:600;cursor:pointer;display:none;">
         Tahlil qilish
       </button>
     </div>
@@ -266,6 +266,10 @@ document.addEventListener('DOMContentLoaded', () => {
   }
   if (practiceData.length > 1) drawPracticeChart();
   renderDailyPlan();
+  // AI tahlilni avtomatik yuklash (premium foydalanuvchilar uchun)
+  {% if is_premium %}
+  loadAIAnalysis();
+  {% endif %}
 });
 
 // ── IELTS per-part scores ──────────────────────────────────────────────
@@ -428,43 +432,63 @@ function drawPracticeChart() {
 }
 
 // ── Tenses Stats ───────────────────────────────────────────────────────
+const ALL_TENSES = [
+  { key: 'present_simple',      label: 'Present Simple' },
+  { key: 'past_simple',         label: 'Past Simple' },
+  { key: 'present_continuous',  label: 'Present Continuous' },
+  { key: 'present_perfect',     label: 'Present Perfect' },
+  { key: 'past_continuous',     label: 'Past Continuous' },
+  { key: 'past_perfect',        label: 'Past Perfect' },
+  { key: 'future_simple',       label: 'Future Simple' },
+  { key: 'future_continuous',   label: 'Future Continuous' },
+  { key: 'future_perfect',      label: 'Future Perfect' },
+];
+
 async function loadTenseStats() {
   try {
     const r = await fetch('/api/users/tense-stats/', { credentials: 'include' });
     if (!r.ok) throw new Error();
     const data = await r.json();
-    renderTenses(data.tense_stats || data);
+    renderTenses(data.today || {}, data.monthly || {});
   } catch(e) {
-    document.getElementById('tenses-container').innerHTML =
-      '<p style="font-size:13px;color:#6b7280;text-align:center;">Ma\'lumot yo\'q</p>';
+    renderTenses({}, {});
   }
 }
 
-function renderTenses(stats) {
+function renderTenses(today, monthly) {
   const el = document.getElementById('tenses-container');
   if (!el) return;
-  if (!stats || !Object.keys(stats).length) {
-    el.innerHTML = '<p style="font-size:13px;color:#6b7280;text-align:center;">Hali ma\'lumot yo\'q. Practice qiling!</p>';
-    return;
-  }
 
-  const rows = Object.entries(stats).map(([name, data]) => {
-    const pct = typeof data === 'object' ? (data.percent || 0) : data;
-    const total = typeof data === 'object' ? (data.total || 0) : 0;
-    const correct = typeof data === 'object' ? (data.correct || 0) : 0;
-    const color = pct >= 80 ? '#10b981' : pct >= 60 ? '#f59e0b' : '#ef4444';
-    const emoji = pct >= 80 ? '✅' : pct >= 60 ? '⚠️' : '❌';
+  const rows = ALL_TENSES.map(({ key, label }) => {
+    const t = today[key] || {};
+    const m = monthly[key] || {};
+    const todayPct = t.accuracy || 0;
+    const monthPct = m.accuracy || 0;
+    const tColor = todayPct >= 80 ? '#10b981' : todayPct >= 50 ? '#f59e0b' : '#ef4444';
+    const mColor = monthPct >= 80 ? '#10b981' : monthPct >= 50 ? '#f59e0b' : '#ef4444';
+    const emoji = todayPct >= 80 ? '✅' : todayPct >= 50 ? '⚠️' : todayPct === 0 ? '➖' : '❌';
+    const todayLabel = todayPct > 0
+      ? `<span style="font-size:12px;font-weight:700;color:${tColor};">${todayPct}%</span>`
+      : `<span style="font-size:12px;color:#6b7280;">0%</span>`;
+    const monthLabel = monthPct > 0
+      ? `<span style="font-size:11px;color:${mColor};">${monthPct}%</span>`
+      : `<span style="font-size:11px;color:#4b5563;">—</span>`;
 
     return `
-    <div style="margin-bottom:12px;">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
-        <span style="font-size:13px;color:#d1d5db;">${emoji} ${name}</span>
-        <span style="font-size:13px;font-weight:700;color:${color};">${pct}%</span>
+    <div style="margin-bottom:14px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:5px;">
+        <span style="font-size:13px;color:#d1d5db;">${emoji} ${label}</span>
+        <div style="display:flex;align-items:center;gap:8px;">
+          ${monthLabel}
+          <span style="font-size:10px;color:#4b5563;">30d</span>
+          ${todayLabel}
+          <span style="font-size:10px;color:#6b7280;">bugun</span>
+        </div>
       </div>
-      <div style="background:#374151;border-radius:4px;height:8px;overflow:hidden;">
-        <div style="width:${pct}%;height:100%;background:${color};border-radius:4px;transition:width 0.8s ease;"></div>
+      <div style="background:#374151;border-radius:4px;height:6px;overflow:hidden;">
+        <div style="width:${todayPct}%;height:100%;background:${tColor};border-radius:4px;transition:width 0.8s ease;"></div>
       </div>
-      ${total ? `<div style="font-size:11px;color:#6b7280;margin-top:2px;">${correct}/${total} to'g'ri</div>` : ''}
+      ${t.usage ? `<div style="font-size:11px;color:#4b5563;margin-top:2px;">${t.correct||0}/${t.usage} to'g'ri (bugun)</div>` : ''}
     </div>`;
   }).join('');
 
@@ -481,8 +505,7 @@ async function loadAIAnalysis() {
   const container = document.getElementById('ai-analysis-container');
   const ctContainer = document.getElementById('critical-thinking-container');
 
-  btn.textContent = '⏳ Tahlil...';
-  btn.disabled = true;
+  if (btn) { btn.textContent = '⏳ Tahlil...'; btn.disabled = true; }
   container.innerHTML = `
     <div style="text-align:center;padding:20px;">
       <div style="font-size:32px;margin-bottom:12px;">🤖</div>
@@ -495,14 +518,15 @@ async function loadAIAnalysis() {
 
     if (!data.ok) {
       container.innerHTML = `<p style="color:#ef4444;font-size:13px;">${data.error || 'Xato yuz berdi'}</p>`;
-      btn.textContent = 'Qayta';
+      btn.textContent = 'Qayta urinish';
+      btn.style.display = 'inline-block';
       btn.disabled = false;
       return;
     }
 
     const analysis = data.analysis;
     analysisLoaded = true;
-    btn.textContent = '✅ Tahlil qilindi';
+    if (btn) btn.textContent = '✅ Tahlil qilindi';
 
     const problems = analysis.problems || [];
     const exercises = analysis.exercises || [];
@@ -539,7 +563,8 @@ async function loadAIAnalysis() {
 
   } catch(e) {
     container.innerHTML = '<p style="color:#ef4444;font-size:13px;">Server bilan bog\'lanishda xato</p>';
-    btn.textContent = 'Qayta';
+    btn.textContent = 'Qayta urinish';
+    btn.style.display = 'inline-block';
     btn.disabled = false;
   }
 }

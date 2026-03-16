@@ -1,0 +1,244 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+
+{% block title %}CEFR Savollar{% endblock %}
+
+{% block content_title %}<h1>CEFR Savollar</h1>{% endblock %}
+
+{% block content %}
+<style>
+  .cefr-hub { max-width: 960px; }
+  .cefr-section {
+    background: #fff;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    margin-bottom: 28px;
+    overflow: hidden;
+    box-shadow: 0 1px 4px rgba(0,0,0,.07);
+  }
+  .cefr-section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 20px;
+    background: #f8f9fa;
+    border-bottom: 1px solid #ddd;
+  }
+  .cefr-section-title { font-size: 15px; font-weight: 700; margin: 0; }
+  .cefr-add-btn {
+    background: #417690;
+    color: #fff !important;
+    padding: 6px 14px;
+    border-radius: 5px;
+    font-size: 13px;
+    font-weight: 600;
+    text-decoration: none;
+  }
+  .cefr-add-btn:hover { background: #2c5f7a; }
+  .cefr-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  .cefr-table th {
+    background: #eef0f2;
+    padding: 9px 16px;
+    text-align: left;
+    font-weight: 600;
+    color: #444;
+    border-bottom: 1px solid #ddd;
+  }
+  .cefr-table td {
+    padding: 9px 16px;
+    border-bottom: 1px solid #f0f0f0;
+    vertical-align: middle;
+  }
+  .cefr-table tr:last-child td { border-bottom: none; }
+  .cefr-table tr:hover td { background: #fafbfc; }
+  .del-btn {
+    background: #ba2121;
+    color: #fff !important;
+    padding: 3px 10px;
+    border-radius: 4px;
+    font-size: 12px;
+    text-decoration: none;
+    white-space: nowrap;
+  }
+  .del-btn:hover { background: #8a1a1a; }
+  .empty-msg { padding: 16px 20px; color: #888; font-style: italic; }
+  .badge {
+    display: inline-block;
+    background: #e8f4fd;
+    color: #2980b9;
+    border-radius: 4px;
+    padding: 2px 8px;
+    font-size: 11px;
+    font-weight: 600;
+    margin-left: 6px;
+  }
+  .badge-for  { background: #eafaf1; color: #27ae60; }
+  .badge-against { background: #fdf2f0; color: #c0392b; }
+  .img-check { color: #27ae60; font-weight: bold; }
+</style>
+
+<div class="cefr-hub">
+
+  <!-- Part 1.1 -->
+  <div class="cefr-section">
+    <div class="cefr-section-header">
+      <h2 class="cefr-section-title">📋 Part 1.1 — Shaxsiy savollar
+        <span class="badge">{{ p1_1|length }} ta</span>
+      </h2>
+      <a class="cefr-add-btn" href="{{ add_url }}?part=1&sub_part=1">+ Qo'shish</a>
+    </div>
+    {% if p1_1 %}
+    <table class="cefr-table">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Savol</th>
+          <th style="width:80px;">O'chirish</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for q in p1_1 %}
+        <tr>
+          <td style="color:#999;width:40px;">{{ forloop.counter }}</td>
+          <td>{{ q.question }}</td>
+          <td>
+            <a class="del-btn"
+               href="{% url 'admin:cefr_delete_question' q.pk %}"
+               onclick="return confirm('O\'chirishni tasdiqlaysizmi?')">O'chir</a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p class="empty-msg">Hali savollar yo'q.</p>
+    {% endif %}
+  </div>
+
+  <!-- Part 1.2 -->
+  <div class="cefr-section">
+    <div class="cefr-section-header">
+      <h2 class="cefr-section-title">🖼 Part 1.2 — Rasmli savollar (2 ta rasm)
+        <span class="badge">{{ p1_2|length }} ta</span>
+      </h2>
+      <a class="cefr-add-btn" href="{{ add_url }}?part=1&sub_part=2">+ Qo'shish</a>
+    </div>
+    {% if p1_2 %}
+    <table class="cefr-table">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Savol</th>
+          <th>Ko'rsatma</th>
+          <th>Rasmlar</th>
+          <th style="width:80px;">O'chirish</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for q in p1_2 %}
+        <tr>
+          <td style="color:#999;width:40px;">{{ forloop.counter }}</td>
+          <td>{{ q.question }}</td>
+          <td style="color:#666;font-size:13px;">{{ q.instruction|default:"—" }}</td>
+          <td style="font-size:13px;">
+            {% if q.telegram_file_id %}<span class="img-check">✓1</span>{% else %}—{% endif %}
+            {% if q.telegram_file_id2 %}<span class="img-check"> ✓2</span>{% endif %}
+          </td>
+          <td>
+            <a class="del-btn"
+               href="{% url 'admin:cefr_delete_question' q.pk %}"
+               onclick="return confirm('O\'chirishni tasdiqlaysizmi?')">O'chir</a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p class="empty-msg">Hali savollar yo'q.</p>
+    {% endif %}
+  </div>
+
+  <!-- Part 2 -->
+  <div class="cefr-section">
+    <div class="cefr-section-header">
+      <h2 class="cefr-section-title">🃏 Part 2 — Cue Card
+        <span class="badge">{{ p2|length }} ta</span>
+      </h2>
+      <a class="cefr-add-btn" href="{{ add_url }}?part=2">+ Qo'shish</a>
+    </div>
+    {% if p2 %}
+    <table class="cefr-table">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Savol / Mavzu</th>
+          <th>Ko'rsatma</th>
+          <th style="width:80px;">O'chirish</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for q in p2 %}
+        <tr>
+          <td style="color:#999;width:40px;">{{ forloop.counter }}</td>
+          <td>{{ q.question }}</td>
+          <td style="color:#666;font-size:13px;">{{ q.instruction|default:"—" }}</td>
+          <td>
+            <a class="del-btn"
+               href="{% url 'admin:cefr_delete_question' q.pk %}"
+               onclick="return confirm('O\'chirishni tasdiqlaysizmi?')">O'chir</a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p class="empty-msg">Hali savollar yo'q.</p>
+    {% endif %}
+  </div>
+
+  <!-- Part 3 -->
+  <div class="cefr-section">
+    <div class="cefr-section-header">
+      <h2 class="cefr-section-title">💬 Part 3 — FOR / AGAINST
+        <span class="badge">{{ p3|length }} ta</span>
+      </h2>
+      <a class="cefr-add-btn" href="{{ add_url }}?part=3">+ Qo'shish</a>
+    </div>
+    {% if p3 %}
+    <table class="cefr-table">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Savol</th>
+          <th>Pozitsiya</th>
+          <th style="width:80px;">O'chirish</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for q in p3 %}
+        <tr>
+          <td style="color:#999;width:40px;">{{ forloop.counter }}</td>
+          <td>{{ q.question }}</td>
+          <td>
+            {% if q.stance == 'FOR' %}
+              <span class="badge badge-for">FOR</span>
+            {% elif q.stance == 'AGAINST' %}
+              <span class="badge badge-against">AGAINST</span>
+            {% else %}—{% endif %}
+          </td>
+          <td>
+            <a class="del-btn"
+               href="{% url 'admin:cefr_delete_question' q.pk %}"
+               onclick="return confirm('O\'chirishni tasdiqlaysizmi?')">O'chir</a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p class="empty-msg">Hali savollar yo'q.</p>
+    {% endif %}
+  </div>
+
+</div>
+{% endblock %}

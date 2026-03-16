@@ -1,0 +1,129 @@
+{% extends "admin/change_form.html" %}
+
+{% block extrahead %}
+{{ block.super }}
+<style>
+  .cefr-tab-nav {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin: 18px 0 6px;
+  }
+  .cefr-tab-nav button {
+    padding: 9px 18px;
+    border: 2px solid #ddd;
+    background: #f8f9fa;
+    border-radius: 7px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 700;
+    transition: all .15s;
+    color: #444;
+  }
+  .cefr-tab-nav button.active {
+    background: #417690;
+    color: #fff;
+    border-color: #417690;
+  }
+  .cefr-tab-nav button:hover:not(.active) {
+    background: #e2edf3;
+    border-color: #417690;
+  }
+  /* Hide all tab fieldsets initially; JS will show active */
+  fieldset.tab-part1_1,
+  fieldset.tab-part1_2,
+  fieldset.tab-part2,
+  fieldset.tab-part3 {
+    display: none;
+  }
+  fieldset.tab-visible {
+    display: block !important;
+  }
+  /* Highlight image fields in Part 1.2 */
+  .tab-part1_2 .field-p1_2_q1,
+  .tab-part1_2 .field-p1_2_q2,
+  .tab-part1_2 .field-p1_2_q3 {
+    background: #f0f7ff;
+    border-left: 3px solid #417690;
+    padding-left: 10px;
+    margin-top: 16px;
+    border-radius: 4px;
+  }
+  /* FOR green, AGAINST red accent */
+  .tab-part3 .field-p3_for_q1,
+  .tab-part3 .field-p3_for_q2,
+  .tab-part3 .field-p3_for_q3 {
+    border-left: 3px solid #27ae60;
+    padding-left: 10px;
+  }
+  .tab-part3 .field-p3_against_q1,
+  .tab-part3 .field-p3_against_q2,
+  .tab-part3 .field-p3_against_q3 {
+    border-left: 3px solid #e74c3c;
+    padding-left: 10px;
+  }
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  const tabs = [
+    { cls: 'tab-part1_1', label: '📋 Part 1.1' },
+    { cls: 'tab-part1_2', label: '🖼 Part 1.2' },
+    { cls: 'tab-part2',   label: '🃏 Part 2' },
+    { cls: 'tab-part3',   label: '💬 Part 3' },
+  ];
+
+  // Build nav
+  const nav = document.createElement('div');
+  nav.className = 'cefr-tab-nav';
+
+  tabs.forEach(function (tab, i) {
+    const fs = document.querySelector('fieldset.' + tab.cls);
+    if (!fs) return;
+
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.textContent = tab.label;
+    btn.dataset.cls = tab.cls;
+
+    if (i === 0) {
+      btn.classList.add('active');
+      fs.classList.add('tab-visible');
+    }
+
+    btn.addEventListener('click', function () {
+      // Hide all
+      tabs.forEach(function (t) {
+        const f = document.querySelector('fieldset.' + t.cls);
+        if (f) f.classList.remove('tab-visible');
+      });
+      nav.querySelectorAll('button').forEach(function (b) {
+        b.classList.remove('active');
+      });
+      // Show clicked
+      fs.classList.add('tab-visible');
+      btn.classList.add('active');
+    });
+
+    nav.appendChild(btn);
+  });
+
+  // Insert nav before first tab fieldset
+  const first = document.querySelector('fieldset.tab-part1_1');
+  if (first && first.parentNode) {
+    first.parentNode.insertBefore(nav, first);
+  }
+
+  // On form submit — show all fieldsets so validation works
+  const form = document.querySelector('#content-main form');
+  if (form) {
+    form.addEventListener('submit', function () {
+      tabs.forEach(function (t) {
+        const f = document.querySelector('fieldset.' + t.cls);
+        if (f) f.classList.add('tab-visible');
+      });
+    });
+  }
+});
+</script>
+{% endblock %}

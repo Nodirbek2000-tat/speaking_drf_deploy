@@ -1,0 +1,141 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+
+{% block extrahead %}
+{{ block.super }}
+<style>
+  .import-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-top: 20px; }
+  .import-card { border: 1px solid #e5e7eb; border-radius: 10px; padding: 24px; }
+  .import-card h3 { margin: 0 0 4px 0; font-size: 17px; }
+  .import-card .sub { color: #6b7280; font-size: 13px; margin: 0 0 16px 0; }
+
+  .field-table { width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 16px; }
+  .field-table th { background: #f3f4f6; padding: 6px 10px; text-align: left; font-weight: 600; color: #374151; }
+  .field-table td { padding: 6px 10px; border-top: 1px solid #f3f4f6; }
+  .badge-req  { background: #fef3c7; color: #92400e; padding: 1px 7px; border-radius: 9px; font-size: 11px; font-weight: 600; }
+  .badge-opt  { background: #f3f4f6; color: #6b7280;  padding: 1px 7px; border-radius: 9px; font-size: 11px; }
+
+  .example-block { background: #0f172a; color: #e2e8f0; border-radius: 8px; padding: 14px; font-size: 12px; font-family: monospace; white-space: pre; overflow: auto; max-height: 380px; line-height: 1.6; }
+  .kw  { color: #93c5fd; }  /* key  */
+  .str { color: #86efac; }  /* string value */
+  .sym { color: #cbd5e1; }  /* brackets/comma */
+  .bool{ color: #fbbf24; }  /* true/false */
+
+  textarea.json-in {
+    width: 100%; font-family: monospace; font-size: 13px;
+    border: 1px solid #d1d5db; border-radius: 8px; padding: 10px;
+    resize: vertical; background: #fafafa;
+  }
+  textarea.json-in:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 20%, transparent); }
+
+  .btn-import {
+    margin-top: 10px; border: none; padding: 10px 24px;
+    border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 600;
+    color: white; background: var(--accent); width: 100%;
+    transition: opacity .15s;
+  }
+  .btn-import:hover { opacity: .85; }
+
+  .msg-ok  { padding:10px 14px; border-radius:8px; margin-bottom:12px; background:#d1fae5; color:#065f46; border:1px solid #6ee7b7; }
+  .msg-err { padding:10px 14px; border-radius:8px; margin-bottom:12px; background:#fee2e2; color:#991b1b; border:1px solid #fca5a5; }
+
+  @media (max-width: 900px) { .import-grid { grid-template-columns: 1fr; } }
+</style>
+{% endblock %}
+
+{% block content %}
+<style>:root { --accent: {{ color }}; }</style>
+
+<h2 style="margin-bottom:4px;">📥 {{ title }}</h2>
+<p style="color:#6b7280;margin-top:0;">JSON formatida savollarni tez import qiling</p>
+
+{% if messages %}
+{% for message in messages %}
+<div class="{% if 'success' in message.tags %}msg-ok{% else %}msg-err{% endif %}">
+  {{ message }}
+</div>
+{% endfor %}
+{% endif %}
+
+<div class="import-grid">
+
+  <!-- CHAP: Format hujjati -->
+  <div class="import-card">
+    <h3 style="color:var(--accent);">📖 JSON Format</h3>
+    <p class="sub">Har bir maydonning tavsifi va misoli</p>
+
+    <table class="field-table">
+      <thead>
+        <tr>
+          <th>Maydon</th>
+          <th>Holat</th>
+          <th>Tavsif</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for field, status, desc in fields_doc %}
+        <tr>
+          <td><code style="color:var(--accent);font-weight:600;">{{ field }}</code></td>
+          <td>
+            {% if status == 'Majburiy' %}
+              <span class="badge-req">Majburiy</span>
+            {% else %}
+              <span class="badge-opt">Ixtiyoriy</span>
+            {% endif %}
+          </td>
+          <td style="color:#4b5563;">{{ desc }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <p style="font-size:13px;font-weight:600;color:#374151;margin-bottom:8px;">📄 Namuna JSON:</p>
+    <div class="example-block">{{ example }}</div>
+
+    <div style="margin-top:16px;padding:12px;background:#eff6ff;border-radius:8px;border:1px solid #bfdbfe;">
+      <p style="margin:0;font-size:12px;color:#1e40af;">
+        💡 <b>Maslahat:</b> Massivni <code>[ ]</code> ichiga oling.
+        Bir importda bir nechta element qo'shishingiz mumkin.
+      </p>
+    </div>
+  </div>
+
+  <!-- O'NG: Import form -->
+  <div class="import-card">
+    <h3 style="color:var(--accent);">⬆️ JSON Yuklash</h3>
+    <p class="sub">JSON matnini quyidagi maydonga joylashtiring va "Import" tugmasini bosing</p>
+
+    <form method="post">
+      {% csrf_token %}
+      <input type="hidden" name="import_type" value="{{ import_type }}">
+
+      <label style="font-size:13px;font-weight:600;color:#374151;display:block;margin-bottom:6px;">
+        JSON ma'lumotlar:
+      </label>
+      <textarea
+        name="json_data"
+        rows="18"
+        class="json-in"
+        placeholder="[ { ... }, { ... } ]"
+        spellcheck="false"
+      ></textarea>
+
+      <button type="submit" class="btn-import">
+        ✅ Import qilish
+      </button>
+    </form>
+
+    <div style="margin-top:16px;padding:12px;background:#f0fdf4;border-radius:8px;border:1px solid #bbf7d0;font-size:12px;color:#166534;">
+      <b>⚠️ Diqqat:</b><br>
+      • JSON sintaksisi to'g'ri bo'lishi kerak<br>
+      • String qiymatlar <code>"qo'shtirnoq"</code> ichida bo'lsin<br>
+      • Boolean: <code>true</code> yoki <code>false</code> (kichik harf)
+    </div>
+  </div>
+
+</div>
+
+<p style="margin-top:20px;">
+  <a href="{{ back_url_resolved }}" style="color:var(--accent);text-decoration:none;">← Ro'yxatga qaytish</a>
+</p>
+{% endblock %}

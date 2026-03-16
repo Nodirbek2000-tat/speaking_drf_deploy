@@ -177,19 +177,44 @@ class PracticeSessionConsumer(AsyncWebsocketConsumer):
         return reply
 
     async def _chat_completion(self, messages: list, max_tokens: int = 80) -> str:
-        import openai
+        """GPT-4o-mini o'rniga Gemini 1.5 Flash — tezroq va arzonroq"""
+        import google.generativeai as genai
         from django.conf import settings
         try:
-            client = openai.AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
-            resp = await client.chat.completions.create(
-                model='gpt-4o-mini',
-                messages=messages,
-                max_tokens=max_tokens,
-                temperature=0.7,
+            genai.configure(api_key=settings.GEMINI_API_KEY)
+
+            # System va user/assistant xabarlarni ajratamiz
+            system_text = ''
+            history = []
+            contents = None
+
+            for msg in messages:
+                role = msg['role']
+                text = msg.get('content', '')
+                if role == 'system':
+                    system_text = text
+                elif role == 'user':
+                    contents = text          # so'nggi user xabari
+                    history.append({'role': 'user', 'parts': [text]})
+                elif role == 'assistant':
+                    history.append({'role': 'model', 'parts': [text]})
+
+            # So'nggi user xabarini historydan olib tashlaymiz (send_message_async ga beramiz)
+            chat_history = history[:-1] if history and history[-1]['role'] == 'user' else history
+
+            model = genai.GenerativeModel(
+                'gemini-2.0-flash',
+                system_instruction=system_text or None,
+                generation_config=genai.GenerationConfig(
+                    max_output_tokens=max_tokens,
+                    temperature=0.7,
+                ),
             )
-            return resp.choices[0].message.content.strip()
+            chat = model.start_chat(history=chat_history)
+            resp = await chat.send_message_async(contents or '')
+            return resp.text.strip()
         except Exception as e:
-            logger.error(f'GPT error: {e}')
+            logger.error(f'Gemini chat error: {e}')
             return ''
 
     # ── STT ───────────────────────────────────────────────────────────
@@ -269,7 +294,7 @@ class PracticeSessionConsumer(AsyncWebsocketConsumer):
     # ── Feedback ─────────────────────────────────────────────────────
 
     async def _generate_feedback(self) -> dict:
-        import openai
+        import google.generativeai as genai
         from django.conf import settings
 
         user_lines = [m['content'] for m in self.full_transcript if m['role'] == 'user']
@@ -281,37 +306,40 @@ class PracticeSessionConsumer(AsyncWebsocketConsumer):
             for m in self.full_transcript
         )
 
-        prompt = f"""Analyze this English practice conversation. Return ONLY JSON.
+        prompt = f"""Analyze this English practice conversation. Return ONLY valid JSON, no markdown.
 
 Conversation:
 {conversation}
 
-JSON:
+Return this exact JSON structure:
 {{
-  "score": 0-100,
-  "grammar_score": 0-100,
-  "vocab_score": 0-100,
-  "fluency_score": 0-100,
-  "strengths": ["...", "..."],
-  "improvements": ["...", "..."],
-  "mistakes": [{{"wrong":"...","correct":"...","explanation":"..."}}],
-  "overall_comment": "1-2 sentences",
-  "daily_plan": ["task1","task2","task3"],
-  "critical_thinking": "advice",
-  "tense_stats": {{"Present Simple":{{"total":0,"correct":0,"percent":0}}}}
+  "score": <int 0-100>,
+  "grammar_score": <int 0-100>,
+  "vocab_score": <int 0-100>,
+  "fluency_score": <int 0-100>,
+  "strengths": ["strength1", "strength2"],
+  "improvements": ["improvement1", "improvement2"],
+  "mistakes": [{{"wrong":"...", "correct":"...", "explanation":"..."}}],
+  "overall_comment": "1-2 sentence summary",
+  "daily_plan": ["task1", "task2", "task3"],
+  "critical_thinking": "advice on analytical thinking",
+  "tense_stats": {{"Present Simple": {{"total": 0, "correct": 0, "percent": 0}}}}
 }}"""
 
         try:
-            client = openai.AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
-            resp = await client.chat.completions.create(
-                model='gpt-4o-mini',
-                messages=[{'role': 'user', 'content': prompt}],
-                response_format={'type': 'json_object'},
-                max_tokens=700,
+            genai.configure(api_key=settings.GEMINI_API_KEY)
+            model = genai.GenerativeModel(
+                'gemini-2.0-flash',
+                generation_config=genai.GenerationConfig(
+                    response_mime_type='application/json',
+                    max_output_tokens=800,
+                    temperature=0.3,
+                ),
             )
-            return json.loads(resp.choices[0].message.content)
+            resp = await model.generate_content_async(prompt)
+            return json.loads(resp.text)
         except Exception as e:
-            logger.error(f'Feedback error: {e}')
+            logger.error(f'Gemini feedback error: {e}')
             return _empty_feedback()
 
     # ── DB ────────────────────────────────────────────────────────────

@@ -65,6 +65,20 @@
     </div>
 
 
+    <!-- My Progress -->
+    <div class="card p-4 flex items-center gap-4" style="cursor:pointer;" onclick="goToProgress()">
+      <div class="w-12 h-12 rounded-2xl flex items-center justify-center text-2xl" style="background:rgba(99,102,241,0.15);">📈</div>
+      <div class="flex-1">
+        <div class="font-semibold text-sm text-white">My Progress</div>
+        <div class="text-xs text-slate-400">Natijalar va AI tahlil</div>
+      </div>
+      {% if user.has_premium_active %}
+      <div class="badge-premium text-xs">👑</div>
+      {% else %}
+      <div style="font-size:18px;">›</div>
+      {% endif %}
+    </div>
+
     <!-- Join Info -->
     <div class="card p-4 flex items-center gap-3">
       <div class="w-10 h-10 rounded-full bg-slate-700/50 flex items-center justify-center text-lg">📅</div>
@@ -124,6 +138,26 @@ const activePage = 'home';
 document.querySelectorAll('.nav-item').forEach(el => {
   if (el.getAttribute('href') === '/webapp/home/') el.classList.add('active');
 });
+
+const isPremium = {{ user.has_premium_active|lower }};
+
+function goToProgress() {
+  if (!isPremium) {
+    showToast('💎 My Progress faqat Premium foydalanuvchilar uchun');
+    setTimeout(() => { window.location.href = '/webapp/premium/'; }, 1800);
+    return;
+  }
+  window.location.href = '/webapp/progress/';
+}
+
+function showToast(msg) {
+  const t = document.createElement('div');
+  t.textContent = msg;
+  t.style.cssText = 'position:fixed;bottom:84px;left:50%;transform:translateX(-50%) translateY(10px);background:#1a1a2e;border:1px solid #6366f1;color:#a5b4fc;padding:10px 18px;border-radius:12px;font-size:13px;font-weight:500;z-index:9999;white-space:nowrap;opacity:0;transition:opacity 0.2s,transform 0.2s;';
+  document.body.appendChild(t);
+  requestAnimationFrame(() => { t.style.opacity = '1'; t.style.transform = 'translateX(-50%) translateY(0)'; });
+  setTimeout(() => { t.style.opacity = '0'; setTimeout(() => t.remove(), 200); }, 2000);
+}
 
 async function loadProblems() {
   document.getElementById('problemsModal').classList.remove('hidden');

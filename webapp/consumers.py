@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 _search_queue: dict = {}
 
-REALTIME_URL = 'wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview-2024-12-17'
+GEMINI_LIVE_MODEL = 'gemini-2.0-flash-live-001'
 
 
 # ─── VoiceMatchmakingConsumer ──────────────────────────────────────────────────
@@ -171,12 +171,15 @@ class VoiceCallConsumer(AsyncWebsocketConsumer):
             pass
 
 
-# ─── AICallConsumer — OpenAI Realtime API proxy ───────────────────────────────
+# ─── AICallConsumer — Gemini Live API proxy ───────────────────────────────────
 
 class AICallConsumer(AsyncWebsocketConsumer):
     """
-    Browser PCM16 audio → bizning server → OpenAI Realtime API
-    OpenAI Realtime API PCM16 audio → bizning server → Browser
+    Browser PCM16 audio → bizning server → Gemini 2.0 Flash Live API
+    Gemini Live API PCM16 audio → bizning server → Browser
+
+    Audio format: PCM16, 16kHz, mono (kirish)
+                  PCM16, 24kHz, mono (chiqish — Gemini standart)
     """
 
     AI_INSTRUCTIONS = (
@@ -198,135 +201,129 @@ class AICallConsumer(AsyncWebsocketConsumer):
             return
 
         await self.accept()
-        self.openai_ws = None
-        self.forward_task = None
-        self.room = await self._create_room()
+        self.gemini_session  = None
+        self._gemini_ctx     = None
+        self.forward_task    = None
+        self.room            = await self._create_room()
 
         try:
-            await self._connect_openai(self.AI_INSTRUCTIONS)
+            await self._connect_gemini()
         except Exception as e:
-            logger.error(f'AICallConsumer: OpenAI connect failed: {e}')
-            await self.send(text_data=json.dumps({'type': 'error', 'text': 'Could not connect to AI. Try again.'}))
+            logger.error(f'AICallConsumer: Gemini connect failed: {e}')
+            await self.send(text_data=json.dumps({
+                'type': 'error', 'text': 'Could not connect to AI. Try again.'
+            }))
             await self.close()
 
     async def disconnect(self, close_code):
         await self._cleanup()
 
     async def receive(self, text_data=None, bytes_data=None):
-        if bytes_data:
-            if self.openai_ws:
-                try:
-                    audio_b64 = base64.b64encode(bytes_data).decode()
-                    await self.openai_ws.send(json.dumps({
-                        'type': 'input_audio_buffer.append',
-                        'audio': audio_b64,
-                    }))
-                except Exception as e:
-                    logger.error(f'AICallConsumer.receive audio error: {e}')
+        # Browser PCM16 audio chunk → Gemini
+        if bytes_data and self.gemini_session:
+            try:
+                from google.genai import types as gtypes
+                await self.gemini_session.send(
+                    input=gtypes.LiveClientRealtimeInput(
+                        media_chunks=[gtypes.Blob(
+                            data=bytes_data,
+                            mime_type='audio/pcm;rate=16000',
+                        )]
+                    )
+                )
+            except Exception as e:
+                logger.error(f'AICallConsumer.receive audio error: {e}')
 
         elif text_data:
             data = json.loads(text_data)
             if data.get('type') == 'end':
                 await self._cleanup()
-                await self.send(text_data=json.dumps({'type': 'ended', 'room_id': self.room.id}))
+                await self.send(text_data=json.dumps({
+                    'type': 'ended', 'room_id': self.room.id
+                }))
                 try:
                     from .tasks import analyze_ai_conversation
                     analyze_ai_conversation.delay(self.room.id, self.user.id)
                 except Exception as e:
                     logger.warning(f'Celery task failed: {e}')
 
-    async def _connect_openai(self, instructions: str):
-        import websockets
+    # ── Gemini Live ulanish ────────────────────────────────────────────
+
+    async def _connect_gemini(self):
+        import google.genai as google_genai
+        from google.genai import types as gtypes
         from django.conf import settings
 
-        headers = {
-            'Authorization': f'Bearer {settings.OPENAI_API_KEY}',
-            'OpenAI-Beta': 'realtime=v1',
-        }
-        self.openai_ws = await websockets.connect(
-            REALTIME_URL, additional_headers=headers,
-            ping_interval=None, ping_timeout=None
+        client = google_genai.Client(api_key=settings.GEMINI_API_KEY)
+
+        config = gtypes.LiveConnectConfig(
+            response_modalities=['AUDIO'],
+            system_instruction=gtypes.Content(
+                parts=[gtypes.Part(text=self.AI_INSTRUCTIONS)],
+                role='user',
+            ),
+            speech_config=gtypes.SpeechConfig(
+                voice_config=gtypes.VoiceConfig(
+                    prebuilt_voice_config=gtypes.PrebuiltVoiceConfig(
+                        voice_name='Aoede',   # Tabiiy ingliz ovozi
+                    )
+                )
+            ),
         )
 
-        await self.openai_ws.send(json.dumps({
-            'type': 'session.update',
-            'session': {
-                'modalities': ['audio', 'text'],
-                'instructions': instructions,
-                'voice': 'alloy',
-                'input_audio_format': 'pcm16',
-                'output_audio_format': 'pcm16',
-                'input_audio_transcription': {'model': 'whisper-1'},
-                'turn_detection': {
-                    'type': 'server_vad',
-                    'threshold': 0.6,
-                    'prefix_padding_ms': 150,
-                    'silence_duration_ms': 500,
-                },
-                'temperature': 0.7,
-                'max_response_output_tokens': 120,
-            }
-        }))
+        self._gemini_ctx = client.aio.live.connect(
+            model=GEMINI_LIVE_MODEL, config=config
+        )
+        self.gemini_session = await self._gemini_ctx.__aenter__()
 
-        self.forward_task = asyncio.create_task(self._forward_from_openai())
+        # AI birinchi salom bersin
+        await self.gemini_session.send(
+            input='Hello! Greet the user warmly and start the conversation.',
+            end_of_turn=True,
+        )
 
-        await self.openai_ws.send(json.dumps({
-            'type': 'conversation.item.create',
-            'item': {
-                'type': 'message',
-                'role': 'user',
-                'content': [{'type': 'input_text', 'text': 'Hello! Greet me and start the conversation.'}]
-            }
-        }))
-        await self.openai_ws.send(json.dumps({'type': 'response.create'}))
+        # Javoblarni browserga yo'naltiruvchi background task
+        self.forward_task = asyncio.create_task(self._forward_from_gemini())
 
-    async def _forward_from_openai(self):
+    # ── Gemini → Browser ──────────────────────────────────────────────
+
+    async def _forward_from_gemini(self):
         try:
-            async for raw in self.openai_ws:
-                event = json.loads(raw)
-                etype = event.get('type', '')
+            while True:
+                turn = self.gemini_session.receive()
+                async for response in turn:
+                    # PCM16 audio → browser (binary)
+                    if response.data:
+                        await self.send(bytes_data=response.data)
 
-                if etype == 'response.audio.delta':
-                    audio_bytes = base64.b64decode(event.get('delta', ''))
-                    if audio_bytes:
-                        await self.send(bytes_data=audio_bytes)
-
-                elif etype == 'response.audio_transcript.delta':
-                    delta = event.get('delta', '')
-                    if delta:
+                    # Text transcript → browser
+                    if response.text:
                         await self.send(text_data=json.dumps({
                             'type': 'ai_text_delta',
-                            'text': delta,
+                            'text': response.text,
                         }))
 
-                elif etype == 'response.audio_transcript.done':
-                    await self.send(text_data=json.dumps({
-                        'type': 'ai_text_done',
-                        'text': event.get('transcript', ''),
-                    }))
+                    # User transcription
+                    sc = getattr(response, 'server_content', None)
+                    if sc:
+                        if getattr(sc, 'input_transcription', None):
+                            txt = sc.input_transcription.text or ''
+                            if txt.strip():
+                                await self.send(text_data=json.dumps({
+                                    'type': 'user_transcript',
+                                    'text': txt.strip(),
+                                }))
+                                await self._save_msg_db('user', txt.strip())
 
-                elif etype == 'conversation.item.input_audio_transcription.completed':
-                    transcript = event.get('transcript', '').strip()
-                    if transcript:
-                        await self.send(text_data=json.dumps({
-                            'type': 'user_transcript',
-                            'text': transcript,
-                        }))
-                        await self._save_msg_db('user', transcript)
-
-                elif etype == 'input_audio_buffer.speech_started':
-                    await self.send(text_data=json.dumps({'type': 'user_speaking'}))
-
-                elif etype == 'response.audio.done':
-                    await self.send(text_data=json.dumps({'type': 'ai_audio_done'}))
-
-                elif etype == 'error':
-                    logger.error(f'AICallConsumer OpenAI error: {event}')
+                # Turn tugadi
+                await self.send(text_data=json.dumps({'type': 'ai_audio_done'}))
 
         except asyncio.CancelledError:
             pass
         except Exception as e:
-            logger.error(f'AICallConsumer._forward_from_openai: {e}')
+            logger.error(f'AICallConsumer._forward_from_gemini: {e}')
+
+    # ── Cleanup ───────────────────────────────────────────────────────
 
     async def _cleanup(self):
         if self.forward_task:
@@ -335,12 +332,12 @@ class AICallConsumer(AsyncWebsocketConsumer):
                 await self.forward_task
             except asyncio.CancelledError:
                 pass
-        if self.openai_ws:
+        if self._gemini_ctx and self.gemini_session:
             try:
-                await self.openai_ws.close()
+                await self._gemini_ctx.__aexit__(None, None, None)
             except Exception:
                 pass
-            self.openai_ws = None
+            self.gemini_session = None
         if hasattr(self, 'room'):
             await self._end_room()
 

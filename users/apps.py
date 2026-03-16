@@ -6,6 +6,7 @@ class UsersConfig(AppConfig):
     name = 'users'
 
     def ready(self):
+        import users.signals  # noqa — premium change signals
         self._patch_admin_index()
 
     def _patch_admin_index(self):

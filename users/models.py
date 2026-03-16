@@ -1,4 +1,5 @@
 import uuid
+from django.conf import settings
 from django.contrib.auth.models import AbstractUser
 from django.db import models
 from django.utils import timezone
@@ -106,6 +107,28 @@ class UserTenseStats(models.Model):
 
     def __str__(self):
         return f"{self.telegram_id} | {self.date} | {self.tense_name} — {self.accuracy}%"
+
+
+class AIAdviceHistory(models.Model):
+    """Har bir AI tahlil natijasini saqlaydi — keyingi tahlillarda kontekst uchun"""
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
+        related_name='advice_history'
+    )
+    advice = models.JSONField(help_text="AI tahlil natijasi (JSON)")
+    context_summary = models.TextField(
+        blank=True,
+        help_text="Keyingi tahlil uchun qisqa xulosa (AI tarafidan yoziladi)"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = 'AI Maslahat Tarixi'
+        verbose_name_plural = 'AI Maslahat Tarixi'
+
+    def __str__(self):
+        return f"{self.user} | {self.created_at.strftime('%d.%m.%Y %H:%M')}"
 
 
 class Referral(models.Model):

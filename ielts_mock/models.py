@@ -43,6 +43,22 @@ class IELTSQuestion(models.Model):
         return f"Part {self.part}{intro_tag}: {self.question[:60]}"
 
 
+class IELTSPart1Question(IELTSQuestion):
+    """Proxy model — admin panelda Part 1 savollar alohida bo'lim"""
+    class Meta:
+        proxy = True
+        verbose_name = 'IELTS Part 1 Savol'
+        verbose_name_plural = '📋 IELTS Part 1 — Savollar'
+
+
+class IELTSPart23Set(IELTSQuestion):
+    """Proxy model — admin panelda Part 2+3 (Cue Card) alohida bo'lim"""
+    class Meta:
+        proxy = True
+        verbose_name = 'IELTS Cue Card (Part 2+3)'
+        verbose_name_plural = '🃏 IELTS Part 2+3 — Cue Cards'
+
+
 class IELTSSession(models.Model):
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
