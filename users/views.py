@@ -435,42 +435,44 @@ class UserTenseStatsView(APIView):
 
 
 class MyAnalysisView(APIView):
-    """JWT auth bilan foydalanuvchi AI tahlili"""
+    """JWT auth bilan foydalanuvchi AI tahlili — IELTS/CEFR tarix + tense stats"""
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
         from datetime import timedelta
         import os
         from openai import OpenAI
+        from ielts_mock.models import IELTSSession
+        from cefr_mock.models import CEFRSession
 
         user = request.user
         telegram_id = str(user.telegram_id) if user.telegram_id else None
         if not telegram_id:
-            return Response({"analysis": "", "weak_tenses": [], "recommendations": []})
+            return Response({"analysis": "", "weak_tenses": [], "recommendations": [],
+                             "ielts_summary": {}, "cefr_summary": {}})
 
         today = timezone.now().date()
         month_start = today - timedelta(days=30)
 
+        # ── Tense statistikalar ──────────────────────────────────────────────
         monthly_stats = UserTenseStats.objects.filter(telegram_id=telegram_id, date__gte=month_start)
-        today_stats = UserTenseStats.objects.filter(telegram_id=telegram_id, date=today)
+        today_stats   = UserTenseStats.objects.filter(telegram_id=telegram_id, date=today)
 
-        # Aggregate stats
         def aggregate(qs):
             result = {}
             for s in qs:
                 if s.tense_name not in result:
                     result[s.tense_name] = {"usage": 0, "correct": 0}
-                result[s.tense_name]["usage"] += s.usage_count
+                result[s.tense_name]["usage"]   += s.usage_count
                 result[s.tense_name]["correct"] += s.correct_count
             for tense in result:
                 u = result[tense]["usage"]
                 result[tense]["accuracy"] = round(result[tense]["correct"] / u * 100) if u > 0 else 0
             return result
 
-        monthly = aggregate(monthly_stats)
+        monthly    = aggregate(monthly_stats)
         today_data = aggregate(today_stats)
 
-        # Zaif zamonlar (accuracy < 65%)
         weak_tenses = [
             {"tense": t, "accuracy": v["accuracy"], "usage": v["usage"]}
             for t, v in monthly.items()
@@ -478,10 +480,8 @@ class MyAnalysisView(APIView):
         ]
         weak_tenses.sort(key=lambda x: x["accuracy"])
 
-        # Bugungi o'sish (today vs monthly avg)
         growth_today = None
         if today_data and monthly:
-            best_growth = None
             best_pct = 0
             for tense, tv in today_data.items():
                 mv = monthly.get(tense, {})
@@ -489,46 +489,163 @@ class MyAnalysisView(APIView):
                     diff = tv["accuracy"] - mv["accuracy"]
                     if diff > best_pct:
                         best_pct = diff
-                        best_growth = {"tense": tense, "percent": diff}
-            growth_today = best_growth
+                        growth_today = {"tense": tense, "percent": diff}
 
-        # AI tahlil
-        analysis_text = ""
+        # ── IELTS tarix xulosa ────────────────────────────────────────────────
+        ielts_sessions = IELTSSession.objects.filter(
+            user=user, is_completed=True
+        ).order_by('-ended_at')[:10]
+
+        ielts_summary = {}
+        if ielts_sessions:
+            last = ielts_sessions[0]
+            bands = [float(s.overall_band) for s in ielts_sessions if s.overall_band]
+            sub   = last.sub_scores or {}
+            ielts_summary = {
+                "last_band":    float(last.overall_band) if last.overall_band else 0,
+                "avg_band":     round(sum(bands) / len(bands), 1) if bands else 0,
+                "total_mocks":  len(bands),
+                "trend":        round(bands[0] - bands[-1], 1) if len(bands) >= 2 else 0,
+                "last_date":    last.ended_at.strftime('%d/%m/%Y') if last.ended_at else "",
+                "part1_band":   float(sub.get('part1_band') or 0),
+                "part2_band":   float(sub.get('part2_band') or 0),
+                "part3_band":   float(sub.get('part3_band') or 0),
+                "fluency":      float(sub.get('fluency') or 0),
+                "grammar":      float(sub.get('grammar') or 0),
+                "lexical":      float(sub.get('lexical') or 0),
+                "pronunciation": float(sub.get('pronunciation') or 0),
+                "strengths":    last.strengths[:3] if last.strengths else [],
+                "improvements": last.improvements[:3] if last.improvements else [],
+                "recommendations": last.recommendations[:3] if last.recommendations else [],
+            }
+
+        # ── CEFR tarix xulosa ─────────────────────────────────────────────────
+        cefr_sessions = CEFRSession.objects.filter(
+            user=user, is_completed=True
+        ).order_by('-ended_at')[:10]
+
+        cefr_summary = {}
+        if cefr_sessions:
+            last_c   = cefr_sessions[0]
+            scores   = [s.score for s in cefr_sessions if s.score]
+            fb       = last_c.feedback or {}
+            part_sc  = fb.get('part_scores') or {}
+            cefr_summary = {
+                "last_score":   last_c.score or 0,
+                "last_level":   last_c.level or "",
+                "avg_score":    round(sum(scores) / len(scores)) if scores else 0,
+                "total_mocks":  len(scores),
+                "trend":        scores[0] - scores[-1] if len(scores) >= 2 else 0,
+                "last_date":    last_c.ended_at.strftime('%d/%m/%Y') if last_c.ended_at else "",
+                "part1":        int(part_sc.get('part1') or 0),
+                "part2":        int(part_sc.get('part2') or 0),
+                "part3":        int(part_sc.get('part3') or 0),
+                "strengths":    fb.get('strengths', [])[:3],
+                "improvements": fb.get('improvements', [])[:3],
+            }
+
+        # ── AI tahlil (OpenAI dan, aks holda mahalliy) ────────────────────────
+        analysis_text  = ""
         recommendations = []
-        openai_key = os.environ.get("OPENAI_API_KEY", "")
-        if openai_key and monthly:
+        openai_key = os.environ.get("OPENAI_API_KEY", "") or getattr(settings, "OPENAI_API_KEY", "")
+
+        # Mahalliy tahlil — AI yo'q bo'lsa ham ishlaydi
+        def _local_analysis():
+            lines = []
+            if ielts_summary:
+                b = ielts_summary.get('last_band', 0)
+                trend = ielts_summary.get('trend', 0)
+                lines.append(f"IELTS: last band {b}/9.0, {ielts_summary.get('total_mocks')} mocks taken.")
+                if trend > 0:
+                    lines.append(f"Great progress! Band improved by {trend} points.")
+                elif trend < 0:
+                    lines.append(f"Band dropped by {abs(trend)} — focus on consistency.")
+                p1 = ielts_summary.get('part1_band', 0)
+                p2 = ielts_summary.get('part2_band', 0)
+                p3 = ielts_summary.get('part3_band', 0)
+                if p1 or p2 or p3:
+                    weak_part = min([(p1,'Part 1'),(p2,'Part 2'),(p3,'Part 3')], key=lambda x: x[0] if x[0] else 99)
+                    if weak_part[0]:
+                        lines.append(f"Weakest part: {weak_part[1]} ({weak_part[0]}/9.0) — practice more.")
+            if cefr_summary:
+                lines.append(f"CEFR: last score {cefr_summary.get('last_score')}/75 ({cefr_summary.get('last_level')}).")
+            if weak_tenses:
+                names = ", ".join(w['tense'] for w in weak_tenses[:3])
+                lines.append(f"Grammar weak areas: {names}.")
+            recs = []
+            if ielts_summary.get('improvements'):
+                recs += [f"- {i}" for i in ielts_summary['improvements'][:2]]
+            if weak_tenses:
+                recs.append(f"- Practice {weak_tenses[0]['tense']} tense (accuracy: {weak_tenses[0]['accuracy']}%)")
+            return " ".join(lines), recs
+
+        if openai_key and (monthly or ielts_summary or cefr_summary):
             try:
-                tense_lines = []
+                context_lines = []
+                if ielts_summary:
+                    context_lines.append(
+                        f"IELTS: last band {ielts_summary['last_band']}, avg {ielts_summary['avg_band']}, "
+                        f"{ielts_summary['total_mocks']} mocks, "
+                        f"Part1={ielts_summary['part1_band']} Part2={ielts_summary['part2_band']} Part3={ielts_summary['part3_band']}, "
+                        f"fluency={ielts_summary['fluency']} grammar={ielts_summary['grammar']}"
+                    )
+                if cefr_summary:
+                    context_lines.append(
+                        f"CEFR: last score {cefr_summary['last_score']}/75 ({cefr_summary['last_level']}), "
+                        f"avg {cefr_summary['avg_score']}, {cefr_summary['total_mocks']} mocks"
+                    )
                 for t, v in monthly.items():
-                    tense_lines.append(f"- {t}: {v['accuracy']}% accuracy ({v['usage']} uses)")
+                    context_lines.append(f"Tense '{t}': {v['accuracy']}% accuracy ({v['usage']} uses)")
+
                 prompt = (
-                    "Analyze this English grammar tense statistics for a language learner:\n\n"
-                    + "\n".join(tense_lines)
-                    + "\n\nProvide in English:\n"
-                    "1. Brief overall assessment (1-2 sentences)\n"
-                    "2. Biggest weaknesses and why\n"
-                    "3. Three specific, actionable recommendations\n"
-                    "Keep it concise and encouraging."
+                    "Analyze this English learner's performance data:\n\n"
+                    + "\n".join(context_lines)
+                    + "\n\nProvide:\n"
+                    "1. Brief overall assessment (2 sentences)\n"
+                    "2. Top 2 weaknesses with specific advice\n"
+                    "3. Three actionable recommendations (numbered)\n"
+                    "Be encouraging but honest. Keep total response under 150 words."
                 )
-                oai = OpenAI(api_key=openai_key)
+                oai  = OpenAI(api_key=openai_key)
                 resp = oai.chat.completions.create(
                     model="gpt-4o-mini",
                     messages=[
-                        {"role": "system", "content": "You are an English grammar coach analyzing student data."},
-                        {"role": "user", "content": prompt}
+                        {"role": "system", "content": "You are a professional English speaking coach."},
+                        {"role": "user",   "content": prompt},
                     ],
-                    max_tokens=400
+                    max_tokens=350,
+                    timeout=10,
                 )
-                analysis_text = resp.choices[0].message.content.strip()
-                # Parse recommendations (last 3 lines or bullet points)
-                lines = [l.strip() for l in analysis_text.split("\n") if l.strip()]
-                recommendations = [l for l in lines if l.startswith(("•", "-", "1.", "2.", "3.","*"))][-3:]
+                analysis_text  = resp.choices[0].message.content.strip()
+                lines          = [l.strip() for l in analysis_text.split("\n") if l.strip()]
+                recommendations = [l for l in lines if l[:2] in ("1.", "2.", "3.", "- ", "• ")][-3:]
             except Exception:
-                pass
+                analysis_text, recommendations = _local_analysis()
+        else:
+            analysis_text, recommendations = _local_analysis()
+
+        # ── AI chat sessiyalar xulosa ─────────────────────────────────────────
+        from chat.models import AIChat
+        chat_sessions = AIChat.objects.filter(user=user).order_by('-created_at')[:5]
+        chat_summary = {
+            "total":       AIChat.objects.filter(user=user).count(),
+            "last_5": [
+                {
+                    "coach":    s.coach,
+                    "messages": s.message_count,
+                    "date":     s.ended_at.strftime('%d/%m/%Y') if s.ended_at else "",
+                    "analysis": s.analysis[:200] if s.analysis else "",
+                }
+                for s in chat_sessions
+            ],
+        }
 
         return Response({
-            "analysis": analysis_text,
-            "weak_tenses": weak_tenses[:3],
-            "growth_today": growth_today,
+            "analysis":        analysis_text,
+            "weak_tenses":     weak_tenses[:5],
+            "growth_today":    growth_today,
             "recommendations": recommendations,
+            "ielts_summary":   ielts_summary,
+            "cefr_summary":    cefr_summary,
+            "chat_summary":    chat_summary,
         })

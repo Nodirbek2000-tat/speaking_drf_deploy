@@ -49,12 +49,21 @@ class ChatRating(models.Model):
 
 
 class AIChat(models.Model):
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='ai_chats')
-    created_at = models.DateTimeField(auto_now_add=True)
-    ended_at = models.DateTimeField(null=True, blank=True)
+    user          = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='ai_chats')
+    coach         = models.CharField(max_length=20, blank=True, default='', help_text='alex yoki emma')
+    message_count = models.PositiveIntegerField(default=0)
+    analysis      = models.TextField(blank=True, help_text='Sessiya oxirida AI tahlil matni')
+    tense_stats   = models.JSONField(null=True, blank=True, help_text='Zamonlar statistikasi')
+    created_at    = models.DateTimeField(auto_now_add=True)
+    ended_at      = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         ordering = ['-created_at']
+        verbose_name = 'AI Suhbat'
+        verbose_name_plural = 'AI Suhbatlar'
+
+    def __str__(self):
+        return f"{self.user} — {self.coach} ({self.message_count} xabar)"
 
 
 class AIChatMessage(models.Model):

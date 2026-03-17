@@ -49,6 +49,7 @@ urlpatterns = [
     path('bot-api/leaderboard/', views.bot_api_leaderboard, name='bot_api_leaderboard'),
     path('bot-api/save-ielts/', views.bot_api_save_ielts, name='bot_api_save_ielts'),
     path('bot-api/save-cefr/', views.bot_api_save_cefr, name='bot_api_save_cefr'),
+    path('bot-api/save-chat/', views.bot_api_save_chat, name='bot_api_save_chat'),
     path('bot-api/save-phone/', views.bot_api_save_phone, name='bot_api_save_phone'),
     path('bot-api/check-limit/', views.bot_api_check_limit, name='bot_api_check_limit'),
 

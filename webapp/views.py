@@ -60,18 +60,13 @@ def auth_view(request):
 
     # Debug rejimda test login (faqat dev uchun, superuser EMAS — real Telegram user)
     if settings.DEBUG and init_data == 'test':
-        # Superuser o'rniga test Telegram user yaratamiz
         from users.models import User
-        test_tg_id = 999999999  # Test telegram_id
+        test_tg_id = 999999999
         user, created = User.objects.get_or_create(
             telegram_id=test_tg_id,
-            defaults={
-                'username': 'test_webapp_user',
-                'first_name': 'Test',
-                'last_name': 'User',
-            }
+            defaults={'username': 'test_webapp_user', 'first_name': 'Test', 'last_name': 'User'}
         )
-        logout(request)  # Eski sessionni tozalash
+        logout(request)
         user.backend = 'django.contrib.auth.backends.ModelBackend'
         login(request, user)
         return JsonResponse({'ok': True, 'redirect': '/webapp/home/', 'created': created})
@@ -81,7 +76,7 @@ def auth_view(request):
     if not user_data:
         logger.warning(
             f"[WebApp Auth] FAILED — token_ok={bool(bot_token)}, "
-            f"initData_len={len(init_data)}, initData_preview={init_data[:80]!r}"
+            f"initData_len={len(init_data)}, preview={init_data[:80]!r}"
         )
         if settings.DEBUG:
             return JsonResponse({
@@ -624,7 +619,6 @@ def _check_bot_secret(request):
 
 
 @webapp_login_required
-@webapp_login_required
 def progress(request):
     """Progress page with charts and AI daily plan — Premium only"""
     from ielts_mock.models import IELTSSession
@@ -640,7 +634,10 @@ def progress(request):
 
     ielts_sessions = list(IELTSSession.objects.filter(
         user=user, is_completed=True
-    ).order_by('started_at').values('overall_band', 'sub_scores', 'started_at'))
+    ).order_by('started_at').values(
+        'overall_band', 'sub_scores', 'started_at',
+        'strengths', 'improvements', 'mistakes', 'recommendations'
+    ))
 
     cefr_sessions = list(CEFRSession.objects.filter(
         user=user, is_completed=True
@@ -659,6 +656,23 @@ def progress(request):
         Q(user1=user) | Q(user2=user), status='ended'
     ).count()
 
+    # AI chat sessiyalar
+    from chat.models import AIChat
+    ai_chat_sessions = list(AIChat.objects.filter(
+        user=user
+    ).order_by('-created_at').values(
+        'coach', 'message_count', 'analysis', 'created_at', 'ended_at'
+    )[:20])
+
+    ai_chat_data = []
+    for s in ai_chat_sessions:
+        ai_chat_data.append({
+            'coach':         s.get('coach', ''),
+            'messages':      s.get('message_count', 0),
+            'analysis':      s.get('analysis', ''),
+            'date':          s['created_at'].strftime('%d/%m/%Y') if s.get('created_at') else '',
+        })
+
     # Format dates for JS charts
     ielts_data = []
     for s in ielts_sessions:
@@ -666,32 +680,39 @@ def progress(request):
             continue
         sub = s.get('sub_scores') or {}
         ielts_data.append({
-            'band': float(s['overall_band']),
+            'band':    float(s['overall_band']),
             'fluency': float(sub.get('fluency') or 0),
             'lexical': float(sub.get('lexical') or 0),
             'grammar': float(sub.get('grammar') or 0),
-            'p1': float(sub.get('part1_band') or 0),
-            'p2': float(sub.get('part2_band') or 0),
-            'p3': float(sub.get('part3_band') or 0),
-            'date': s['started_at'].strftime('%d/%m'),
+            'pronunciation': float(sub.get('pronunciation') or 0),
+            'p1':   float(sub.get('part1_band') or 0),
+            'p2':   float(sub.get('part2_band') or 0),
+            'p3':   float(sub.get('part3_band') or 0),
+            'date': s['started_at'].strftime('%d/%m/%Y'),
+            'strengths':       (s.get('strengths') or [])[:3],
+            'improvements':    (s.get('improvements') or [])[:3],
+            'recommendations': (s.get('recommendations') or [])[:3],
         })
 
     cefr_data = []
     for s in cefr_sessions:
         if not s['score']:
             continue
-        fb = s.get('feedback') or {}
+        fb          = s.get('feedback') or {}
         part_scores = fb.get('part_scores') or {}
         cefr_data.append({
-            'score': s['score'],
-            'level': s['level'] or '',
-            'fluency': float(fb.get('fluency') or 0),
+            'score':    s['score'],
+            'level':    s['level'] or '',
+            'fluency':  float(fb.get('fluency') or 0),
             'accuracy': float(fb.get('accuracy') or 0),
             'p1': int(part_scores.get('part1') or 0),
             'p2': int(part_scores.get('part2') or 0),
             'p3': int(part_scores.get('part3') or 0),
             'p4': int(part_scores.get('part4') or 0),
-            'date': s['started_at'].strftime('%d/%m'),
+            'date':         s['started_at'].strftime('%d/%m/%Y'),
+            'strengths':    (fb.get('strengths') or [])[:3],
+            'improvements': (fb.get('improvements') or [])[:3],
+            'summary':      fb.get('summary', ''),
         })
     practice_data = [
         {
@@ -744,23 +765,49 @@ def progress(request):
         except Exception:
             pass
 
+    # IELTS trend (oxirgi 3 vs oldingi 3)
+    ielts_trend = 0
+    if len(ielts_data) >= 4:
+        r = [s['band'] for s in ielts_data[-3:]]
+        o = [s['band'] for s in ielts_data[-6:-3]]
+        if o:
+            ielts_trend = round(sum(r)/len(r) - sum(o)/len(o), 1)
+
+    # CEFR trend
+    cefr_trend = 0
+    if len(cefr_data) >= 4:
+        r = [s['score'] for s in cefr_data[-3:]]
+        o = [s['score'] for s in cefr_data[-6:-3]]
+        if o:
+            cefr_trend = round(sum(r)/len(r) - sum(o)/len(o))
+
+    # Oxirgi IELTS session feedback
+    last_ielts = ielts_data[-1] if ielts_data else {}
+    last_cefr  = cefr_data[-1]  if cefr_data  else {}
+
     return render(request, 'webapp/progress.html', {
         'user': user,
-        'ielts_data': json.dumps(ielts_data),
-        'cefr_data': json.dumps(cefr_data),
-        'practice_data': json.dumps(practice_data),
+        'ielts_data':       json.dumps(ielts_data),
+        'cefr_data':        json.dumps(cefr_data),
+        'practice_data':    json.dumps(practice_data),
         'voice_rooms_count': voice_rooms,
-        'ielts_count': len(ielts_data),
-        'cefr_count': len(cefr_data),
-        'practice_count': len(practice_data),
-        'avg_score': avg_score,
-        'avg_grammar': avg_grammar,
-        'avg_vocab': avg_vocab,
-        'avg_fluency': avg_fluency,
-        'score_trend': score_trend,
-        'daily_plan': json.dumps(daily_plan),
+        'ielts_count':      len(ielts_data),
+        'cefr_count':       len(cefr_data),
+        'practice_count':   len(practice_data),
+        'avg_score':        avg_score,
+        'avg_grammar':      avg_grammar,
+        'avg_vocab':        avg_vocab,
+        'avg_fluency':      avg_fluency,
+        'score_trend':      score_trend,
+        'ielts_trend':      ielts_trend,
+        'cefr_trend':       cefr_trend,
+        'last_ielts':       last_ielts,
+        'last_cefr':        last_cefr,
+        'ai_chat_data':     json.dumps(ai_chat_data),
+        'ai_chat_count':    len(ai_chat_data),
+        'daily_plan':       json.dumps(daily_plan),
         'critical_thinking': critical_thinking,
-        'is_premium': user.has_premium_active,
+        'is_premium':       user.has_premium_active,
     })
 
 @webapp_login_required
@@ -1380,6 +1427,67 @@ def bot_api_save_cefr(request):
             pass
 
     return JsonResponse({'ok': True, 'session_id': session.id, 'score': score, 'level': level})
+
+
+@csrf_exempt
+def bot_api_save_chat(request):
+    """Bot: AI chat sessiyasini DRF ga saqlash"""
+    if not _check_bot_secret(request):
+        return JsonResponse({'error': 'Unauthorized'}, status=401)
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST required'}, status=405)
+
+    from chat.models import AIChat, AIChatMessage
+    from users.models import User
+    from django.utils import timezone
+
+    data = json.loads(request.body)
+    telegram_id   = data.get('telegram_id')
+    coach         = data.get('coach', '')          # 'alex' yoki 'emma'
+    messages      = data.get('messages', [])       # [{role, content}]
+    analysis      = data.get('analysis', '')       # Sessiya tahlil matni
+    tense_stats   = data.get('tense_stats', {})
+
+    if not telegram_id:
+        return JsonResponse({'error': 'telegram_id required'}, status=400)
+
+    try:
+        user = User.objects.get(telegram_id=telegram_id)
+    except User.DoesNotExist:
+        return JsonResponse({'error': 'User not found'}, status=404)
+
+    # Faqat user + assistant xabarlar (system ni chiqarib tashlaymiz)
+    real_messages = [m for m in messages if m.get('role') in ('user', 'assistant')]
+
+    chat = AIChat.objects.create(
+        user          = user,
+        coach         = coach,
+        message_count = len([m for m in real_messages if m.get('role') == 'user']),
+        analysis      = analysis or '',
+        tense_stats   = tense_stats or None,
+        ended_at      = timezone.now(),
+    )
+
+    # Har bir xabarni saqlash
+    AIChatMessage.objects.bulk_create([
+        AIChatMessage(
+            chat    = chat,
+            role    = m['role'],
+            content = m.get('content', '')[:2000],
+        )
+        for m in real_messages
+    ])
+
+    # User ai_chat_count yangilash
+    if hasattr(user, 'ai_chat_count'):
+        user.ai_chat_count = (user.ai_chat_count or 0) + 1
+        user.save(update_fields=['ai_chat_count'])
+
+    return JsonResponse({
+        'ok': True,
+        'chat_id': chat.id,
+        'message_count': chat.message_count,
+    })
 
 
 
